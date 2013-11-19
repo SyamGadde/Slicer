@@ -40,6 +40,13 @@
       <channel>output</channel>
       <description><![CDATA[Recovered bias field (OPTIONAL)]]></description>
     </image>
+    <image>
+      <longflag>outputmask</longflag>
+      <name>outputMaskName</name>
+      <label>Output mask image</label>
+      <channel>output</channel>
+      <description><![CDATA[Write out final mask to this filename (OPTIONAL)]]></description>
+    </image>
   </parameters>
   <parameters>
     <label>N4 Parameters</label>
@@ -102,6 +109,14 @@
       <default>4</default>
     </integer>
 
+    <float>
+      <name>shrinkFactorMM</name>
+      <longflag>shrinkfactormm</longflag>
+      <label>Shrink factor in millimeters</label>
+      <description><![CDATA[Defines how much the image should be upsampled before estimating the inhomogeneity field. Increase if you want to reduce the execution time. Larger values will significantly reduce the computation time.  Overrides the shrinkFactor option.]]></description>
+      <default>0</default>
+    </float>
+
     <image>
       <longflag>weightimage</longflag>
       <name>weightImageName</name>
@@ -125,6 +140,14 @@
       <description><![CDATA[Number of histogram bins. Zero implies use of the default value.]]></description>
       <default>0</default>
     </integer>
+
+    <boolean>
+      <name>newMask</name>
+      <longflag>newmask</longflag>
+      <label>New mask</label>
+      <description><![CDATA[Creates mask using a histogram-based threshold, then cleans up mask by removing "thin" connections between components, and then removing small disconnected components.]]></description>
+      <default>false</default>
+    </boolean>
 
   </parameters>
 </executable>
