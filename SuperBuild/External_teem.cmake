@@ -45,7 +45,7 @@ if(WIN32)
 elseif(APPLE)
   set(teem_PNG_LIBRARY ${teem_PNG_LIBRARY_DIR}/libvtkpng.dylib)
 else()
-  set(teem_PNG_LIBRARY ${teem_PNG_LIBRARY_DIR}/libvtkpng.so)
+  set(teem_PNG_LIBRARY ${teem_PNG_LIBRARY_DIR}/libvtkpng.a)
 endif()
 
 set(teem_URL http://svn.slicer.org/Slicer3-lib-mirrors/trunk/teem-1.10.0-src.tar.gz)
@@ -64,7 +64,8 @@ ExternalProject_Add(${proj}
     -DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}
     -DCMAKE_C_FLAGS:STRING=${ep_common_c_flags}
     -DBUILD_TESTING:BOOL=OFF
-    -DBUILD_SHARED_LIBS:BOOL=ON
+    #-DBUILD_SHARED_LIBS:BOOL=ON
+    -DBUILD_SHARED_LIBS:BOOL=OFF
     ${CMAKE_PROJECT_INCLUDE_EXTERNAL_PROJECT_ARG}
     -DTeem_USE_LIB_INSTALL_SUBDIR:BOOL=ON
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=OFF

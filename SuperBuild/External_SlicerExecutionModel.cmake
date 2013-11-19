@@ -58,6 +58,7 @@ if(NOT DEFINED SlicerExecutionModel_DIR)
       -DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}
       -DCMAKE_C_FLAGS:STRING=${ep_common_c_flags} # Unused
       -DBUILD_TESTING:BOOL=OFF
+      -DBUILD_SHARED_LIBS:BOOL=OFF
       -DITK_DIR:PATH=${ITK_DIR}
       -DSlicerExecutionModel_LIBRARY_PROPERTIES:STRING=${Slicer_LIBRARY_PROPERTIES}
       -DSlicerExecutionModel_INSTALL_BIN_DIR:PATH=${Slicer_INSTALL_LIB_DIR}

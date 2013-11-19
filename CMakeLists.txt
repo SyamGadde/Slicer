@@ -156,8 +156,8 @@ set(Slicer_BINARY_INNER_SUBDIR Slicer-build)
 #-----------------------------------------------------------------------------
 # Build shared lib by default
 #------------------------------------------------------------------------------
-# option(BUILD_SHARED_LIBS "Build Slicer with shared libraries." ON)
-set(BUILD_SHARED_LIBS ON)
+option(BUILD_SHARED_LIBS "Build Slicer with shared libraries." ON)
+#set(BUILD_SHARED_LIBS ON)
 
 #-----------------------------------------------------------------------------
 # Append the library version information to the library target properties.
