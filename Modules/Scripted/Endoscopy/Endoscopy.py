@@ -74,7 +74,7 @@ class EndoscopyWidget:
     inputFiducialsNodeSelector = slicer.qMRMLNodeComboBox()
     inputFiducialsNodeSelector.objectName = 'inputFiducialsNodeSelector'
     inputFiducialsNodeSelector.toolTip = "Select a fiducial list to define control points for the path."
-    inputFiducialsNodeSelector.nodeTypes = ['vtkMRMLAnnotationHierarchyNode', 'vtkMRMLFiducialListNode']
+    inputFiducialsNodeSelector.nodeTypes = ['vtkMRMLMarkupsFiducialNode', 'vtkMRMLAnnotationHierarchyNode', 'vtkMRMLFiducialListNode']
     inputFiducialsNodeSelector.noneEnabled = True
     inputFiducialsNodeSelector.addEnabled = False
     inputFiducialsNodeSelector.removeEnabled = False
@@ -253,14 +253,19 @@ class EndoscopyWidget:
     
   def flyTo(self, f):
     """ Apply the fth step in the path to the global camera"""
-    f = int(f)
-    p = self.path[f]
-    self.camera.SetPosition(*p)
-    foc = self.path[f+1]
-    self.camera.SetFocalPoint(*foc)
-    self.transform.GetMatrixTransformToParent().SetElement(0 ,3, p[0])
-    self.transform.GetMatrixTransformToParent().SetElement(1, 3, p[1])
-    self.transform.GetMatrixTransformToParent().SetElement(2, 3, p[2])
+    if self.path:
+      f = int(f)
+      p = self.path[f]
+      self.camera.SetPosition(*p)
+      foc = self.path[f+1]
+      self.camera.SetFocalPoint(*foc)
+
+      toParent = vtk.vtkMatrix4x4()
+      self.transform.GetMatrixTransformToParent(toParent)
+      toParent.SetElement(0 ,3, p[0])
+      toParent.SetElement(1, 3, p[1])
+      toParent.SetElement(2, 3, p[2])
+      self.transform.SetMatrixTransformToParent(toParent)
 
 
 class EndoscopyComputePath:
@@ -300,7 +305,20 @@ class EndoscopyComputePath:
         coords = [0,0,0]
         f.GetFiducialCoordinates(coords)
         self.p[i] = coords
-    else: 
+    elif self.fids.GetClassName() == "vtkMRMLMarkupsFiducialNode":
+      # slicer4 Markups node
+      self.n = self.fids.GetNumberOfFiducials()
+      n = self.n
+      if n == 0:
+        return
+      # get fiducial positions
+      # sets self.p
+      self.p = numpy.zeros((n,3))
+      for i in xrange(n):
+        coord = [0.0, 0.0, 0.0]
+        self.fids.GetNthFiducialPosition(i, coord)
+        self.p[i] = coord
+    else:
       # slicer3 style fiducial lists
       self.n = self.fids.GetNumberOfFiducials()
       n = self.n

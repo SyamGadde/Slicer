@@ -82,32 +82,54 @@ public:
   /// Set camera Parallel Scale   
   double GetParallelScale();
 
+  ///
+  /// Set the camera view angle
+  /// \sa GetViewAngle(), vtkCamera::SetViewAngle(), SetParallelScale(),
+  /// SetParallelProjection()
+  void SetViewAngle(double viewAngle);
+
+  ///
+  /// Get the camera view angle
+  /// \sa SetViewAngle(), vtkCamera::GetViewAngle(), GetParallelScale(),
+  /// GetParallelProjection()
+  double GetViewAngle();
+
   /// 
-  /// Set camera Position 
+  /// Set the position of the camera in world coordinates.
+  /// \sa GetPosition(), SetFocalPoint(), SetViewUp()
   void SetPosition(double position[3]);
   inline void SetPosition(double x, double y, double z);
 
   /// 
-  /// Get camera Position   
+  /// Get the position of the camera in world coordinates.
+  /// \sa SetPosition(), GetFocalPoint(), GetViewUp()
   double *GetPosition();
+  void GetPosition(double position[3]);
 
   /// 
-  /// Set camera Focal Point 
+  /// Set the focal point of the camera in world coordinates.
+  /// It is also the point around which the camera rotates around.
+  /// \sa GetFocalPoint(), SetPosition(), SetViewUp()
   void SetFocalPoint(double focalPoint[3]);
   inline void SetFocalPoint(double x, double y, double z);
   
   /// 
-  /// Get camera Focal Point 
+  /// Get the focal point of the camera in world coordinates.
+  /// \sa SetFocalPoint(), GetPosition(), GetViewUp()
   double *GetFocalPoint();
+  void GetFocalPoint(double focalPoint[3]);
 
   /// 
   /// Set camera Up vector
+  /// \sa GetViewUp(), SetPosition(), SetFocalPoint()
   void SetViewUp(double viewUp[3]);
   
   /// 
   /// Get camera Up vector
+  /// \sa SetViewUp(), GetPosition(), GetFocalPoint()
   double *GetViewUp();
-  
+  void GetViewUp(double viewUp[3]);
+
   /// 
   /// alternative method to propagate events generated in Camera nodes
   virtual void ProcessMRMLEvents ( vtkObject * /*caller*/, 

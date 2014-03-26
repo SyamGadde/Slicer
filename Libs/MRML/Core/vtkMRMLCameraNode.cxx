@@ -24,8 +24,8 @@ Version:   $Revision: 1.3 $
 #include <vtkCallbackCommand.h>
 #include <vtkObjectFactory.h>
 #include <vtkMath.h>
+#include <vtkNew.h>
 #include <vtkRenderer.h>
-#include <vtkSmartPointer.h>
 #include <vtkTransform.h>
 
 // STD includes
@@ -261,25 +261,18 @@ void vtkMRMLCameraNode::Copy(vtkMRMLNode *anode)
 //----------------------------------------------------------------------------
 void vtkMRMLCameraNode::PrintSelf(ostream& os, vtkIndent indent)
 {
-  int idx;
-  
-  Superclass::PrintSelf(os,indent);
+  this->Superclass::PrintSelf(os,indent);
 
-  os << "Position:\n";
-  for (idx = 0; idx < 2; ++idx)
-    {
-    os << indent << ", " << (this->GetPosition())[idx];
-    }
-  os << "FocalPoint:\n";
-  for (idx = 0; idx < 2; ++idx)
-    {
-    os << indent << ", " << (this->GetFocalPoint())[idx];
-    }
-  os << "ViewUp:\n";
-  for (idx = 0; idx < 2; ++idx)
-    {
-    os << indent << ", " << (this->GetViewUp())[idx];
-    }
+  os << indent << "Parallel projection: " << this->GetParallelProjection() << '\n';
+  os << indent << "Parallel scale: " << this->GetParallelScale() << '\n';
+  os << indent << "ViewAngle:" << this->GetViewAngle() << '\n';
+  double v[3];
+  this->GetPosition(v);
+  os << indent << "Position: " << v[0] << ", " << v[1] << ", " << v[2] << '\n';
+  this->GetFocalPoint(v);
+  os << indent << "FocalPoint: " << v[0] << ", " << v[1] << ", " << v[2] << '\n';
+  this->GetViewUp(v);
+  os << indent << "ViewUp: " << v[0] << ", " << v[1] << ", " << v[2] << '\n';
   os << indent << "ActiveTag: " <<
     (this->GetActiveTag() ? this->GetActiveTag() : "(none)") << "\n";
   os << indent << "AppliedTransform: " ;
@@ -330,7 +323,7 @@ void vtkMRMLCameraNode::SetPosition(double position[3])
 {
   this->Camera->SetPosition(position);
 }
-  
+
 //---------------------------------------------------------------------------
 double *vtkMRMLCameraNode::GetPosition()
 {
@@ -338,11 +331,17 @@ double *vtkMRMLCameraNode::GetPosition()
 }
 
 //---------------------------------------------------------------------------
+void vtkMRMLCameraNode::GetPosition(double position[3])
+{
+  this->Camera->GetPosition(position);
+}
+
+//---------------------------------------------------------------------------
 void vtkMRMLCameraNode::SetFocalPoint(double focalPoint[3]) 
 {
   this->Camera->SetFocalPoint(focalPoint);
 }
-  
+
 //---------------------------------------------------------------------------
 double *vtkMRMLCameraNode::GetFocalPoint()
 {
@@ -350,15 +349,39 @@ double *vtkMRMLCameraNode::GetFocalPoint()
 }
 
 //---------------------------------------------------------------------------
+void vtkMRMLCameraNode::GetFocalPoint(double focalPoint[3])
+{
+  this->Camera->GetFocalPoint(focalPoint);
+}
+
+//---------------------------------------------------------------------------
 void vtkMRMLCameraNode::SetViewUp(double viewUp[3]) 
 {
   this->Camera->SetViewUp(viewUp);
 }
-  
+
 //---------------------------------------------------------------------------
 double *vtkMRMLCameraNode::GetViewUp()
 {
   return this->Camera->GetViewUp();
+}
+
+//---------------------------------------------------------------------------
+void vtkMRMLCameraNode::GetViewUp(double viewUp[3])
+{
+  this->Camera->GetViewUp(viewUp);
+}
+
+//---------------------------------------------------------------------------
+void vtkMRMLCameraNode::SetViewAngle(double viewAngle)
+{
+  this->Camera->SetViewAngle(viewAngle);
+}
+
+//---------------------------------------------------------------------------
+double vtkMRMLCameraNode::GetViewAngle()
+{
+  return this->Camera->GetViewAngle();
 }
 
 //---------------------------------------------------------------------------
@@ -396,13 +419,13 @@ void vtkMRMLCameraNode::ProcessMRMLEvents ( vtkObject *caller,
      * Pn = Td * Pa
      * then we save Tn as Ta for next time
      */
-    vtkSmartPointer<vtkMatrix4x4> deltaTransform = vtkSmartPointer<vtkMatrix4x4>::New();
-    vtkSmartPointer<vtkMatrix4x4> transformToWorld = vtkSmartPointer<vtkMatrix4x4>::New();
+    vtkNew<vtkMatrix4x4> deltaTransform;
+    vtkNew<vtkMatrix4x4> transformToWorld;
     transformToWorld->Identity();
-    tnode->GetMatrixTransformToWorld(transformToWorld);
+    tnode->GetMatrixTransformToWorld(transformToWorld.GetPointer());
 
     this->AppliedTransform->Invert();
-    vtkMatrix4x4::Multiply4x4(transformToWorld, this->AppliedTransform, deltaTransform);
+    vtkMatrix4x4::Multiply4x4(transformToWorld.GetPointer(), this->AppliedTransform, deltaTransform.GetPointer());
 
     // transform the points and the vector through delta and store back to camera
     double v[4];
@@ -428,7 +451,7 @@ void vtkMRMLCameraNode::ProcessMRMLEvents ( vtkObject *caller,
     deltaTransform->MultiplyPoint(v,v);
     this->Camera->SetViewUp(v[0],v[1],v[2]);
 
-    this->GetAppliedTransform()->DeepCopy(transformToWorld);
+    this->GetAppliedTransform()->DeepCopy(transformToWorld.GetPointer());
     this->InvokeEvent(vtkCommand::ModifiedEvent, NULL);
     }
 }

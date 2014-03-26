@@ -80,6 +80,7 @@
 
 // MRML includes
 #include <vtkMRMLNode.h>
+#include <vtkMRMLScene.h>
 
 // VTK includes
 #include <vtkNew.h>
@@ -463,6 +464,13 @@ QString qSlicerApplication::nodeModule(vtkMRMLNode* node)const
            node->IsA("vtkMRMLSliceLayerNode"))
     {
     return "SliceController";
+    }
+  else if (node->IsA("vtkMRMLMarkupsNode") ||
+           node->IsA("vtkMRMLMarkupsDisplayNode") ||
+           node->IsA("vtkMRMLMarkupsStorageNode") ||
+           node->IsA("vtkMRMLAnnotationFiducialNode"))
+    {
+    return "Markups";
     }
   else if (node->IsA("vtkMRMLAnnotationNode") ||
            node->IsA("vtkMRMLAnnotationDisplayNode") ||

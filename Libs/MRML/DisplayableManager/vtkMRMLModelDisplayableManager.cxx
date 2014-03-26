@@ -29,8 +29,8 @@
 #include <vtkMRMLModelNode.h>
 #include <vtkMRMLProceduralColorNode.h>
 #include "vtkMRMLClipModelsNode.h"
+#include <vtkMRMLScene.h>
 #include "vtkMRMLSliceNode.h"
-//#include "vtkMRMLCameraNode.h"
 #include "vtkMRMLViewNode.h"
 #include "vtkMRMLInteractionNode.h"
 
@@ -40,16 +40,20 @@
 #include <vtkClipPolyData.h>
 #include <vtkColorTransferFunction.h>
 #include <vtkDataSetAttributes.h>
+#include <vtkGeneralTransform.h>
 #include <vtkImageActor.h>
 #include <vtkImageData.h>
 #include <vtkImplicitBoolean.h>
 #include <vtkLookupTable.h>
 #include <vtkMatrix4x4.h>
+#include <vtkNew.h>
+#include <vtkObjectFactory.h>
 #include <vtkPlane.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkProperty.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkSmartPointer.h>
+#include <vtkTransformPolyDataFilter.h>
 
 // for picking
 #include <vtkCellPicker.h>
@@ -83,6 +87,7 @@ public:
   std::map<std::string, int>                       DisplayedVisibility;
   std::map<std::string, vtkMRMLDisplayableNode *>  DisplayableNodes;
   std::map<std::string, int>                       RegisteredModelHierarchies;
+  std::map<std::string, vtkTransformPolyDataFilter *> DisplayNodeTransformPolyDataFilters;
 
   vtkMRMLSliceNode *   RedSliceNode;
   vtkMRMLSliceNode *   GreenSliceNode;
@@ -197,6 +202,19 @@ vtkMRMLModelDisplayableManager::~vtkMRMLModelDisplayableManager()
 
   // release the DisplayedModelActors
   this->Internal->DisplayedActors.clear();
+
+  // release transforms
+  std::map<std::string, vtkTransformPolyDataFilter *>::iterator tit;
+  for (tit = this->Internal->DisplayNodeTransformPolyDataFilters.begin();
+       tit != this->Internal->DisplayNodeTransformPolyDataFilters.end(); tit++ )
+    {
+    vtkTransformPolyDataFilter  *transformFilter = (*tit).second;
+    transformFilter->SetInput(0);
+    transformFilter->SetTransform(0);
+    transformFilter->Delete();
+    }
+
+  this->Internal->DisplayNodeTransformPolyDataFilters.clear();
 
   delete this->Internal;
 }
@@ -442,13 +460,17 @@ void vtkMRMLModelDisplayableManager::ProcessMRMLNodesEvents(vtkObject *caller,
                                                            unsigned long event,
                                                            void *callData)
 {
+  if (this->GetMRMLScene() == 0)
+    {
+    return;
+    }
   if ( this->GetInteractor() &&
      this->GetInteractor()->GetRenderWindow() &&
      this->GetInteractor()->GetRenderWindow()->CheckInRenderStatus())
-  {
+    {
     vtkDebugMacro("skipping ProcessMRMLNodesEvents during render");
     return;
-  }
+    }
 
   bool isUpdating = this->GetMRMLScene()->IsBatchProcessing();
   if (vtkMRMLDisplayableNode::SafeDownCast(caller))
@@ -531,6 +553,14 @@ void vtkMRMLModelDisplayableManager::ProcessMRMLNodesEvents(vtkObject *caller,
     {
     this->Superclass::ProcessMRMLNodesEvents(caller, event, callData);
     }
+}
+
+//---------------------------------------------------------------------------
+void vtkMRMLModelDisplayableManager::UnobserveMRMLScene()
+{
+  this->RemoveModelProps();
+  this->RemoveHierarchyObservers(1);
+  this->RemoveModelObservers(1);
 }
 
 //---------------------------------------------------------------------------
@@ -792,6 +822,7 @@ void vtkMRMLModelDisplayableManager::UpdateModelsFromMRML()
     this->Internal->DisplayedNodes.clear();
     this->Internal->DisplayedClipState.clear();
     this->Internal->DisplayedVisibility.clear();
+    this->Internal->DisplayNodeTransformPolyDataFilters.clear();
     this->UpdateModelHierarchies();
     }
 
@@ -841,13 +872,39 @@ void vtkMRMLModelDisplayableManager
 ::UpdateModelPolyData(vtkMRMLDisplayableNode *displayableNode)
 {
   int ndnodes = displayableNode->GetNumberOfDisplayNodes();
+  int i;
+
+  // if no model display nodes found, return
+  int modelDisplayNodeCount = 0;
+  for (i=0; i<ndnodes; i++)
+    {
+    vtkMRMLDisplayNode *dNode = displayableNode->GetNthDisplayNode(i);
+    if (vtkMRMLModelDisplayNode::SafeDownCast(dNode) != NULL)
+      {
+      modelDisplayNodeCount++;
+      }
+    }
+  if (modelDisplayNodeCount == 0)
+    {
+    return;
+    }
 
   vtkMRMLModelNode* modelNode = vtkMRMLModelNode::SafeDownCast(displayableNode);
   vtkMRMLDisplayNode *hdnode = this->GetHierarchyDisplayNode(displayableNode);
   vtkMRMLModelNode *hierarchyModelDisplayNode =
     vtkMRMLModelNode::SafeDownCast(hdnode);
 
-  for (int i=0; i<ndnodes; i++)
+  bool hasNonLinearTransform = false;
+  vtkMRMLTransformNode* tnode = displayableNode->GetParentTransformNode();
+  vtkGeneralTransform *worldTransform = vtkGeneralTransform::New();
+  worldTransform->Identity();
+  if (tnode != 0 && !tnode->IsLinear())
+    {
+    hasNonLinearTransform = true;
+    tnode->GetTransformToWorld(worldTransform);
+    }
+
+  for (i=0; i<ndnodes; i++)
     {
     vtkMRMLDisplayNode *displayNode = displayableNode->GetNthDisplayNode(i);
     vtkMRMLModelDisplayNode *modelDisplayNode =
@@ -889,6 +946,30 @@ void vtkMRMLModelDisplayableManager
       {
       continue;
       }
+
+    // create TransformPolyDataFilter for non-linear transform
+    vtkTransformPolyDataFilter* transformFilter = NULL;
+    if (hasNonLinearTransform)
+      {
+      std::map<std::string, vtkTransformPolyDataFilter *>::iterator tit;
+      tit = this->Internal->DisplayNodeTransformPolyDataFilters.find(displayNode->GetID());
+      if (tit == this->Internal->DisplayNodeTransformPolyDataFilters.end() )
+        {
+        transformFilter = vtkTransformPolyDataFilter::New();
+        this->Internal->DisplayNodeTransformPolyDataFilters[displayNode->GetID()] = transformFilter;
+        }
+      else
+        {
+        transformFilter = (*tit).second;
+        }
+      }
+
+    if (transformFilter && polyData)
+      {
+      transformFilter->SetInput(polyData);
+      transformFilter->SetTransform(worldTransform);
+      }
+
     std::map<std::string, vtkProp3D *>::iterator ait;
     ait = this->Internal->DisplayedActors.find(displayNode->GetID());
     if (ait == this->Internal->DisplayedActors.end() )
@@ -922,13 +1003,19 @@ void vtkMRMLModelDisplayableManager
         if (actor)
           {
           vtkPolyDataMapper *mapper = vtkPolyDataMapper::SafeDownCast(actor->GetMapper());
-          if (mapper && mapper->GetInput() != polyData && !(this->Internal->ClippingOn && clipping))
+
+          if (transformFilter && polyData)
+            {
+            mapper->SetInput(transformFilter->GetOutput());
+            }
+          else if (mapper && mapper->GetInput() != polyData && !(this->Internal->ClippingOn && clipping))
             {
             mapper->SetInput(polyData);
             }
           }
         vtkMRMLTransformNode* tnode = displayableNode->GetParentTransformNode();
         // clipped model could be transformed
+        // TODO: handle non-linear transforms
         if (clipping == 0 || tnode == 0 || !tnode->IsLinear())
           {
           continue;
@@ -955,7 +1042,14 @@ void vtkMRMLModelDisplayableManager
         }
       else
         {
-        mapper->SetInput(polyData);
+        if (transformFilter)
+          {
+          mapper->SetInput(transformFilter->GetOutput());
+          }
+        else
+          {
+          mapper->SetInput(polyData);
+          }
         }
 
       actor->SetMapper(mapper);
@@ -1005,6 +1099,7 @@ void vtkMRMLModelDisplayableManager
         }
       }
     }
+  worldTransform->Delete();
 }
 
 //---------------------------------------------------------------------------
@@ -1013,28 +1108,25 @@ void vtkMRMLModelDisplayableManager::UpdateModel(vtkMRMLDisplayableNode *model)
   this->UpdateModelPolyData(model);
 
   vtkEventBroker *broker = vtkEventBroker::GetInstance();
-  std::vector< vtkObservation *> observations;
-  // observe polydata
-  observations = broker->GetObservations(model, vtkMRMLModelNode::PolyDataModifiedEvent,
-                                         this, this->GetMRMLNodesCallbackCommand());
-  if (observations.size() == 0)
+  vtkEventBroker::ObservationVector observations;
+  // observe polydata;
+  if (!broker->GetObservationExist(model, vtkMRMLModelNode::PolyDataModifiedEvent,
+                                         this, this->GetMRMLNodesCallbackCommand()))
     {
     broker->AddObservation(model, vtkMRMLModelNode::PolyDataModifiedEvent,
                            this, this->GetMRMLNodesCallbackCommand());
     this->Internal->DisplayableNodes[model->GetID()] = model;
     }
   // observe display node
-  observations = broker->GetObservations(model, vtkMRMLDisplayableNode::DisplayModifiedEvent,
-                                         this, this->GetMRMLNodesCallbackCommand());
-  if (observations.size() == 0)
+  if (!broker->GetObservationExist(model, vtkMRMLDisplayableNode::DisplayModifiedEvent,
+                                         this, this->GetMRMLNodesCallbackCommand()))
     {
     broker->AddObservation(model, vtkMRMLDisplayableNode::DisplayModifiedEvent,
                            this, this->GetMRMLNodesCallbackCommand());
     }
 
-  observations = broker->GetObservations(model, vtkMRMLTransformableNode::TransformModifiedEvent,
-                                         this, this->GetMRMLNodesCallbackCommand());
-  if (observations.size() == 0)
+  if (!broker->GetObservationExist(model, vtkMRMLTransformableNode::TransformModifiedEvent,
+                                         this, this->GetMRMLNodesCallbackCommand()))
     {
     broker->AddObservation(model, vtkMRMLTransformableNode::TransformModifiedEvent,
                            this, this->GetMRMLNodesCallbackCommand());
@@ -1322,7 +1414,7 @@ void vtkMRMLModelDisplayableManager::RemoveModelObservers(int clearCache)
 void vtkMRMLModelDisplayableManager::RemoveDisplayableNodeObservers(vtkMRMLDisplayableNode *model)
 {
   vtkEventBroker *broker = vtkEventBroker::GetInstance();
-  std::vector< vtkObservation *> observations;
+  vtkEventBroker::ObservationVector observations;
   if (model != 0)
     {
     observations = broker->GetObservations(
@@ -1341,7 +1433,7 @@ void vtkMRMLModelDisplayableManager::RemoveDisplayableNodeObservers(vtkMRMLDispl
 void vtkMRMLModelDisplayableManager::RemoveHierarchyObservers(int clearCache)
 {
   vtkEventBroker *broker = vtkEventBroker::GetInstance();
-  std::vector< vtkObservation *> observations;
+  vtkEventBroker::ObservationVector observations;
   std::map<std::string, int>::iterator iter;
 
   for(iter=this->Internal->RegisteredModelHierarchies.begin();
@@ -1367,12 +1459,13 @@ void vtkMRMLModelDisplayableManager::RemoveHierarchyObservers(int clearCache)
 void vtkMRMLModelDisplayableManager::SetModelDisplayProperty(vtkMRMLDisplayableNode *model)
 {
   vtkMRMLTransformNode* tnode = model->GetParentTransformNode();
-  vtkSmartPointer<vtkMatrix4x4> transformToWorld = vtkSmartPointer<vtkMatrix4x4>::New();
-  transformToWorld->Identity();
+
+  vtkNew<vtkMatrix4x4> matrixTransformToWorld;
+  matrixTransformToWorld->Identity();
   if (tnode != 0 && tnode->IsLinear())
     {
     vtkMRMLLinearTransformNode *lnode = vtkMRMLLinearTransformNode::SafeDownCast(tnode);
-    lnode->GetMatrixTransformToWorld(transformToWorld);
+    lnode->GetMatrixTransformToWorld(matrixTransformToWorld.GetPointer());
     }
 
   int ndnodes = model->GetNumberOfDisplayNodes();
@@ -1398,7 +1491,7 @@ void vtkMRMLModelDisplayableManager::SetModelDisplayProperty(vtkMRMLDisplayableN
 
       vtkActor *actor = vtkActor::SafeDownCast(prop);
       vtkImageActor *imageActor = vtkImageActor::SafeDownCast(prop);
-      prop->SetUserMatrix(transformToWorld);
+      prop->SetUserMatrix(matrixTransformToWorld.GetPointer());
 
       bool visible = modelDisplayNode->GetVisibility(this->GetMRMLViewNode()->GetID());
       prop->SetVisibility(visible);
@@ -1415,22 +1508,23 @@ void vtkMRMLModelDisplayableManager::SetModelDisplayProperty(vtkMRMLDisplayableN
             {
             vtkMRMLProceduralColorNode* proceduralColorNode =
               vtkMRMLProceduralColorNode::SafeDownCast(modelDisplayNode->GetColorNode());
-            if (modelDisplayNode->GetColorNode()->GetLookupTable() != 0)
+            if (proceduralColorNode &&
+                proceduralColorNode->GetColorTransferFunction() != 0)
+              {
+              // \tbd maybe the trick below should be applied here too
+              vtkNew<vtkColorTransferFunction> ctf;
+              ctf->DeepCopy(proceduralColorNode->GetColorTransferFunction());
+              actor->GetMapper()->SetLookupTable(ctf.GetPointer());
+              }
+            else if (modelDisplayNode->GetColorNode()->GetLookupTable() != 0)
               {
               // \tbd: Could slow down if done too often
               // copy lut so that they are not shared between the mappers
               // vtk sets scalar range on lut while rendering
               // that may cause performance problem if lut's are shared
-              vtkLookupTable *lut = vtkLookupTable::New();
+              vtkNew<vtkLookupTable> lut;
               lut->DeepCopy( modelDisplayNode->GetColorNode()->GetLookupTable());
-              actor->GetMapper()->SetLookupTable(lut);
-              lut->Delete();
-              }
-            else if (proceduralColorNode->GetColorTransferFunction() != 0)
-              {
-              // \tbd maybe the trick above should be applied here too
-              actor->GetMapper()->SetLookupTable(
-                proceduralColorNode->GetColorTransferFunction());
+              actor->GetMapper()->SetLookupTable(lut.GetPointer());
               }
             }
 
@@ -1884,14 +1978,15 @@ vtkClipPolyData* vtkMRMLModelDisplayableManager::CreateTransformedClipper(
   clipper->SetValue( 0.0);
 
   vtkMRMLTransformNode* tnode = model->GetParentTransformNode();
-  vtkSmartPointer<vtkMatrix4x4> transformToWorld = vtkSmartPointer<vtkMatrix4x4>::New();
+  vtkNew<vtkMatrix4x4> transformToWorld;
   transformToWorld->Identity();
   if (tnode != 0 && tnode->IsLinear())
     {
     vtkMRMLLinearTransformNode *lnode = vtkMRMLLinearTransformNode::SafeDownCast(tnode);
-    lnode->GetMatrixTransformToWorld(transformToWorld);
+    lnode->GetMatrixTransformToWorld(transformToWorld.GetPointer());
 
-    vtkImplicitBoolean *slicePlanes =   vtkImplicitBoolean::New();
+    vtkNew<vtkImplicitBoolean> slicePlanes;
+
     if (this->Internal->ClipType == vtkMRMLClipModelsNode::ClipIntersection)
       {
       slicePlanes->SetOperationTypeToIntersection();
@@ -1901,56 +1996,49 @@ vtkClipPolyData* vtkMRMLModelDisplayableManager::CreateTransformedClipper(
       slicePlanes->SetOperationTypeToUnion();
       }
 
-    vtkPlane *redSlicePlane = vtkPlane::New();
-    vtkPlane *greenSlicePlane = vtkPlane::New();
-    vtkPlane *yellowSlicePlane = vtkPlane::New();
-
+    vtkNew<vtkPlane> redSlicePlane;
+    vtkNew<vtkPlane> greenSlicePlane;
+    vtkNew<vtkPlane> yellowSlicePlane;
 
     if (this->Internal->RedSliceClipState != vtkMRMLClipModelsNode::ClipOff)
       {
-      slicePlanes->AddFunction(redSlicePlane);
+      slicePlanes->AddFunction(redSlicePlane.GetPointer());
       }
 
     if (this->Internal->GreenSliceClipState != vtkMRMLClipModelsNode::ClipOff)
       {
-      slicePlanes->AddFunction(greenSlicePlane);
+      slicePlanes->AddFunction(greenSlicePlane.GetPointer());
       }
 
     if (this->Internal->YellowSliceClipState != vtkMRMLClipModelsNode::ClipOff)
       {
-      slicePlanes->AddFunction(yellowSlicePlane);
+      slicePlanes->AddFunction(yellowSlicePlane.GetPointer());
       }
 
     vtkMatrix4x4 *sliceMatrix = 0;
-    vtkSmartPointer<vtkMatrix4x4> mat = vtkSmartPointer<vtkMatrix4x4>::New();
+    vtkNew<vtkMatrix4x4> mat;
     int planeDirection = 1;
     transformToWorld->Invert();
 
     sliceMatrix = this->Internal->RedSliceNode->GetSliceToRAS();
     mat->Identity();
-    vtkMatrix4x4::Multiply4x4(transformToWorld, sliceMatrix, mat);
+    vtkMatrix4x4::Multiply4x4(transformToWorld.GetPointer(), sliceMatrix, mat.GetPointer());
     planeDirection = (this->Internal->RedSliceClipState == vtkMRMLClipModelsNode::ClipNegativeSpace) ? -1 : 1;
-    this->SetClipPlaneFromMatrix(mat, planeDirection, redSlicePlane);
+    this->SetClipPlaneFromMatrix(mat.GetPointer(), planeDirection, redSlicePlane.GetPointer());
 
     sliceMatrix = this->Internal->GreenSliceNode->GetSliceToRAS();
     mat->Identity();
-    vtkMatrix4x4::Multiply4x4(transformToWorld, sliceMatrix, mat);
+    vtkMatrix4x4::Multiply4x4(transformToWorld.GetPointer(), sliceMatrix, mat.GetPointer());
     planeDirection = (this->Internal->GreenSliceClipState == vtkMRMLClipModelsNode::ClipNegativeSpace) ? -1 : 1;
-    this->SetClipPlaneFromMatrix(mat, planeDirection, greenSlicePlane);
+    this->SetClipPlaneFromMatrix(mat.GetPointer(), planeDirection, greenSlicePlane.GetPointer());
 
     sliceMatrix = this->Internal->YellowSliceNode->GetSliceToRAS();
     mat->Identity();
-    vtkMatrix4x4::Multiply4x4(transformToWorld, sliceMatrix, mat);
+    vtkMatrix4x4::Multiply4x4(transformToWorld.GetPointer(), sliceMatrix, mat.GetPointer());
     planeDirection = (this->Internal->YellowSliceClipState == vtkMRMLClipModelsNode::ClipNegativeSpace) ? -1 : 1;
-    this->SetClipPlaneFromMatrix(mat, planeDirection, yellowSlicePlane);
+    this->SetClipPlaneFromMatrix(mat.GetPointer(), planeDirection, yellowSlicePlane.GetPointer());
 
-    clipper->SetClipFunction(slicePlanes);
-
-    slicePlanes->Delete();
-    redSlicePlane->Delete();
-    greenSlicePlane->Delete();
-    yellowSlicePlane->Delete();
-
+    clipper->SetClipFunction(slicePlanes.GetPointer());
     }
   else
     {
@@ -1985,7 +2073,6 @@ void vtkMRMLModelDisplayableManager::OnInteractorStyleEvent(int eventid)
       // it's a 3D displayable manager and the click could have been on a node
       double yNew = windowHeight - y - 1;
       vtkMRMLDisplayNode *displayNode = NULL;
-      vtkMRMLDisplayableNode *displayableNode = NULL;
 
       if (this->Pick(x,yNew) &&
           strcmp(this->GetPickedNodeID(),"") != 0)
@@ -2007,7 +2094,6 @@ void vtkMRMLModelDisplayableManager::OnInteractorStyleEvent(int eventid)
       if (displayNode)
         {
         displayNode->SetColor(1.0, 0, 0);
-        displayableNode = displayNode->GetDisplayableNode();
         this->GetInteractionNode()->SetCurrentInteractionMode(vtkMRMLInteractionNode::ViewTransform);
         }
       }

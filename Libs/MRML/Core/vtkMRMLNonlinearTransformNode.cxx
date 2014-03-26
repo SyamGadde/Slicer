@@ -18,10 +18,13 @@ Version:   $Revision: 1.14 $
 
 #include "vtkGeneralTransform.h"
 #include "vtkGridTransform.h"
+#include "vtkWarpTransform.h"
+
 
 #include "vtkMRMLNonlinearTransformNode.h"
 
 vtkCxxSetObjectMacro(vtkMRMLNonlinearTransformNode,WarpTransformToParent,vtkWarpTransform);
+vtkCxxSetObjectMacro(vtkMRMLNonlinearTransformNode,WarpTransformFromParent,vtkWarpTransform);
 
 
 //----------------------------------------------------------------------------
@@ -31,20 +34,23 @@ vtkMRMLNodeNewMacro(vtkMRMLNonlinearTransformNode);
 vtkMRMLNonlinearTransformNode::vtkMRMLNonlinearTransformNode()
 {
   this->WarpTransformToParent = NULL;
+  this->WarpTransformFromParent = NULL;
+  this->ReadWriteAsTransformToParent = 0;
+  this->InSetAndObserveWarpTransformToParent = 0;
+  this->InSetAndObserveWarpTransformFromParent = 0;
 
-  // default to a grid transform? null transform? or should this be an
-  // abstract class?
-  vtkGridTransform *grid = vtkGridTransform::New();
-  this->SetAndObserveWarpTransformToParent(grid);
-  grid->Delete();
 }
 
 //----------------------------------------------------------------------------
 vtkMRMLNonlinearTransformNode::~vtkMRMLNonlinearTransformNode()
 {
-  if (this->WarpTransformToParent) 
+  if (this->WarpTransformToParent)
     {
-    this->SetAndObserveWarpTransformToParent(NULL);
+    this->SetAndObserveWarpTransformToParent(NULL, false);
+    }
+  if (this->WarpTransformFromParent)
+    {
+    this->SetAndObserveWarpTransformFromParent(NULL, false);
     }
 }
 
@@ -74,14 +80,8 @@ void vtkMRMLNonlinearTransformNode::ReadXMLAttributes(const char** atts)
 // Does NOT copy: ID, FilePrefix, Name, VolumeID
 void vtkMRMLNonlinearTransformNode::Copy(vtkMRMLNode *anode)
 {
-  int disabledModify = this->StartModify();
-
   Superclass::Copy(anode);
-  vtkMRMLNonlinearTransformNode *node = (vtkMRMLNonlinearTransformNode *) anode;
 
-  this->WarpTransformToParent->DeepCopy( node->GetWarpTransformToParent() );
-
-  this->EndModify(disabledModify);
 }
 
 //----------------------------------------------------------------------------
@@ -89,35 +89,57 @@ void vtkMRMLNonlinearTransformNode::PrintSelf(ostream& os, vtkIndent indent)
 {
   Superclass::PrintSelf(os,indent);
 
-  if (this->WarpTransformToParent != NULL) 
+  if (this->WarpTransformToParent != NULL)
     {
     os << indent << "WarpTransformToParent: " << "\n";
     this->WarpTransformToParent->PrintSelf( os, indent.GetNextIndent() );
-//     for (int row=0; row<4; row++) 
-//       {
-//       for (int col=0; col<4; col++) 
-//         {
-//         os << this->MatrixTransformToParent->GetElement(row, col);
-//         if (!(row==3 && col==3)) 
-//           {
-//           os << " ";
-//           }
-//         else 
-//           {
-//           os << "\n";
-//           }
-//         } // for (int col
-//       } // for (int row
     }
 }
 
 //----------------------------------------------------------------------------
 vtkGeneralTransform* vtkMRMLNonlinearTransformNode::GetTransformToParent()
 {
+  vtkWarpTransform *warp = 0;
+  if (!this->InSetAndObserveWarpTransformToParent)
+    {
+    warp = this->GetWarpTransformToParent();
+    }
+
+  if (this->TransformToParent == 0)
+    {
+    this->TransformToParent = vtkGeneralTransform::New();
+    }
   this->TransformToParent->Identity();
-  this->TransformToParent->Concatenate(this->WarpTransformToParent);
+  if (warp)
+    {
+    this->TransformToParent->Concatenate(warp);
+    }
   return this->TransformToParent;
 }
+
+//----------------------------------------------------------------------------
+vtkGeneralTransform* vtkMRMLNonlinearTransformNode::GetTransformFromParent()
+{
+  vtkWarpTransform *warp = 0;
+  if (!this->InSetAndObserveWarpTransformFromParent)
+    {
+    warp = this->GetWarpTransformFromParent();
+    }
+
+  if (this->TransformFromParent == 0)
+    {
+    this->TransformFromParent = vtkGeneralTransform::New();
+    }
+  this->TransformFromParent->Identity();
+  if (warp)
+    {
+    this->TransformFromParent->Concatenate(warp);
+    }
+  return this->TransformFromParent;
+
+}
+
+
 
 //----------------------------------------------------------------------------
 int  vtkMRMLNonlinearTransformNode::GetMatrixTransformToWorld(vtkMatrix4x4* transformToWorld)
@@ -148,9 +170,9 @@ int  vtkMRMLNonlinearTransformNode::GetMatrixTransformToNode(vtkMRMLTransformNod
 }
 
 //----------------------------------------------------------------------------
-void vtkMRMLNonlinearTransformNode::SetAndObserveWarpTransformToParent(vtkWarpTransform *warp)
+void vtkMRMLNonlinearTransformNode::SetAndObserveWarpTransformToParent(vtkWarpTransform *warp, bool updateTrasformFromParent)
 {
-  if (warp == this->WarpTransformToParent)
+  if (warp == this->WarpTransformToParent || this->InSetAndObserveWarpTransformToParent)
     {
     // We return for 2 reasons:
     //   - there is nothing to do
@@ -159,16 +181,77 @@ void vtkMRMLNonlinearTransformNode::SetAndObserveWarpTransformToParent(vtkWarpTr
     //     in this->SetWarpTransformToParent. One must use Register carefully
     return;
     }
+
+  this->InSetAndObserveWarpTransformToParent = 0;
+
   if (this->WarpTransformToParent != NULL)
     {
     this->WarpTransformToParent->RemoveObservers ( vtkCommand::ModifiedEvent, this->MRMLCallbackCommand );
     this->SetWarpTransformToParent(NULL);
     }
+
+  this->SetDisableModifiedEvent(1);
   this->SetWarpTransformToParent(warp);
+  this->SetDisableModifiedEvent(0);
+
   if ( this->WarpTransformToParent )
     {
     this->WarpTransformToParent->AddObserver ( vtkCommand::ModifiedEvent, this->MRMLCallbackCommand );
     }
+
+  if (updateTrasformFromParent && warp && this->WarpTransformFromParent)
+    {
+    this->DeepCopyTransformFromParent(warp);
+    vtkWarpTransform *warpInv = this->GetWarpTransformFromParent();
+    warpInv->Inverse();
+    warpInv->Modified();
+    }
+  this->Modified();
+
+  this->InSetAndObserveWarpTransformToParent = 0;
+}
+
+//----------------------------------------------------------------------------
+void vtkMRMLNonlinearTransformNode::SetAndObserveWarpTransformFromParent(vtkWarpTransform *warp, bool updateTrasformToParent)
+{
+  if (warp == this->WarpTransformFromParent || this->InSetAndObserveWarpTransformFromParent)
+    {
+    // We return for 2 reasons:
+    //   - there is nothing to do
+    //   - the remaining of the function could uninstantiate warp (when calling
+    //     this->SetWarpTransformFromParent(NULL)) but try to register it after
+    //     in this->SetWarpTransformFromParent. One must use Register carefully
+    return;
+    }
+
+  this->InSetAndObserveWarpTransformFromParent = 1;
+
+  if (this->WarpTransformFromParent != NULL)
+    {
+    this->WarpTransformFromParent->RemoveObservers ( vtkCommand::ModifiedEvent, this->MRMLCallbackCommand );
+    this->SetWarpTransformFromParent(NULL);
+    }
+
+  this->SetDisableModifiedEvent(1);
+  this->SetWarpTransformFromParent(warp);
+  this->SetDisableModifiedEvent(0);
+
+  if ( this->WarpTransformFromParent )
+    {
+    this->WarpTransformFromParent->AddObserver ( vtkCommand::ModifiedEvent, this->MRMLCallbackCommand );
+    }
+
+  if (updateTrasformToParent && warp && this->WarpTransformToParent)
+    {
+    this->DeepCopyTransformToParent(warp);
+    vtkWarpTransform *warpInv = this->GetWarpTransformToParent();
+    warpInv->Inverse();
+    warpInv->Modified();
+    }
+  this->Modified();
+
+  this->InSetAndObserveWarpTransformFromParent = 0;
+
 }
 
 
@@ -180,6 +263,11 @@ void vtkMRMLNonlinearTransformNode::ProcessMRMLEvents ( vtkObject *caller,
   Superclass::ProcessMRMLEvents ( caller, event, callData );
 
   if (this->WarpTransformToParent != NULL && this->WarpTransformToParent == vtkWarpTransform::SafeDownCast(caller) &&
+      event ==  vtkCommand::ModifiedEvent)
+    {
+    this->InvokeEvent(vtkMRMLTransformableNode::TransformModifiedEvent, NULL);
+    }
+  else if (this->WarpTransformFromParent != NULL && this->WarpTransformFromParent == vtkWarpTransform::SafeDownCast(caller) &&
       event ==  vtkCommand::ModifiedEvent)
     {
     this->InvokeEvent(vtkMRMLTransformableNode::TransformModifiedEvent, NULL);

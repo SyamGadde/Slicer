@@ -37,9 +37,10 @@
 
 // MRML includes
 #include <vtkMRMLLayoutNode.h>
-#include <vtkMRMLViewNode.h>
 #include <vtkMRMLChartViewNode.h>
 #include <vtkMRMLSliceNode.h>
+#include <vtkMRMLScene.h>
+#include <vtkMRMLViewNode.h>
 
 // VTK includes
 #include <vtkCollection.h>
@@ -340,11 +341,13 @@ void qMRMLLayoutManagerPrivate::removeSliceView(vtkMRMLSliceNode* sliceNode)
   Q_ASSERT(sliceNode);
 
   qMRMLSliceWidget * sliceWidgetToDelete = this->sliceWidget(sliceNode);
-  Q_ASSERT(sliceWidgetToDelete);
 
   // Remove slice widget
-  this->SliceWidgetList.removeAll(sliceWidgetToDelete);
-  delete sliceWidgetToDelete;
+  if (sliceWidgetToDelete)
+    {
+    this->SliceWidgetList.removeAll(sliceWidgetToDelete);
+    delete sliceWidgetToDelete;
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -980,6 +983,26 @@ void qMRMLLayoutManager::setLayoutNumberOfCompareViewColumns(int num)
   Q_D(qMRMLLayoutManager);
 
   d->setLayoutNumberOfCompareViewColumnsInternal(num);
+}
+
+//------------------------------------------------------------------------------
+void qMRMLLayoutManager::resetThreeDViews()
+{
+  for(int idx = 0; idx < this->threeDViewCount(); ++idx)
+    {
+    qMRMLThreeDView * threeDView = this->threeDWidget(idx)->threeDView();
+    threeDView->resetFocalPoint();
+    threeDView->resetCamera();
+    }
+}
+
+//------------------------------------------------------------------------------
+void qMRMLLayoutManager::resetSliceViews()
+{
+  foreach(const QString& viewName, this->sliceViewNames())
+    {
+    this->sliceWidget(viewName)->sliceController()->fitSliceToBackground();
+    }
 }
 
 //------------------------------------------------------------------------------

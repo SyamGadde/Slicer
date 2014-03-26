@@ -5,11 +5,11 @@ set(modules
   DataProbe
   Editor
   EditorLib
-  FiberBundleToLabelMap
   LabelStatistics
   PerformanceTests
   SampleData
   SelfTests
+  SurfaceToolbox
   VectorToScalarVolume
   )
 if(Slicer_USE_NUMPY)
@@ -28,7 +28,11 @@ if(Slicer_BUILD_DICOM_SUPPORT)
       )
   endif()
 endif()
-
+if(Slicer_BUILD_DIFFUSION_SUPPORT)
+  list(APPEND modules
+    FiberBundleToLabelMap
+    )
+endif()
 foreach(module ${modules})
   list(FIND Slicer_QTSCRIPTEDMODULES_DISABLED ${module} _module_disabled)
   if(${_module_disabled} STREQUAL "-1")

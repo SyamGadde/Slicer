@@ -46,9 +46,8 @@ class ScenePerformanceWidget:
   def setup(self):
 
     loader = qt.QUiLoader()
-    moduleName = 'ScenePerformance' #scriptedModulesPath = '/Users/exxos/Work/Slicer/Slicer4/Slicer-Debug/Slicer-build/lib/Slicer-4.2/qt-scripted-modules'
-    scriptedModulesPath = eval('slicer.modules.%s.path' % moduleName.lower())
-    scriptedModulesPath = os.path.dirname(scriptedModulesPath)
+    moduleName = 'ScenePerformance'
+    scriptedModulesPath = os.path.dirname(slicer.util.modulePath(moduleName))
     path = os.path.join(scriptedModulesPath, 'Resources', 'UI', 'ScenePerformance.ui')
 
     qfile = qt.QFile(path)
@@ -145,40 +144,7 @@ class ScenePerformanceWidget:
     """Generic reload method for any scripted module.
     ModuleWizard will subsitute correct default moduleName.
     """
-    import imp, sys, os, slicer
-
-    widgetName = moduleName + "Widget"
-
-    # reload the source code
-    # - set source file path
-    # - load the module to the global space
-    filePath = eval('slicer.modules.%s.path' % moduleName.lower())
-    p = os.path.dirname(filePath)
-    if not sys.path.__contains__(p):
-      sys.path.insert(0,p)
-    fp = open(filePath, "r")
-    globals()[moduleName] = imp.load_module(
-        moduleName, fp, filePath, ('.py', 'r', imp.PY_SOURCE))
-    fp.close()
-
-    # rebuild the widget
-    # - find and hide the existing widget
-    # - create a new widget in the existing parent
-    parent = slicer.util.findChildren(name='%s Reload' % moduleName)[0].parent()
-    for child in parent.children():
-      try:
-        child.hide()
-      except AttributeError:
-        pass
-    # Remove spacer items
-    item = parent.layout().itemAt(0)
-    while item:
-      parent.layout().removeItem(item)
-      item = parent.layout().itemAt(0)
-    # create new widget inside existing parent
-    globals()[widgetName.lower()] = eval(
-        'globals()["%s"].%s(parent)' % (moduleName, widgetName))
-    globals()[widgetName.lower()].setup()
+    globals()[moduleName] = slicer.util.reloadScriptedModule(moduleName)
 
 
 
@@ -350,6 +316,7 @@ class ScenePerformanceTest(unittest.TestCase):
     averageTime = 0
     for x in range(self.Repeat):
       newNode = node.CreateNodeInstance()
+      newNode.UnRegister(node)
       newNode.Copy(node)
       logic.startTiming()
       slicer.mrmlScene.AddNode(newNode)

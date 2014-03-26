@@ -25,6 +25,7 @@
 #include <vtkMRMLApplicationLogic.h>
 #include <vtkMRMLInteractionNode.h>
 #include <vtkMRMLLinearTransformNode.h>
+#include <vtkMRMLScene.h>
 #include <vtkMRMLSelectionNode.h>
 #include <vtkMRMLSliceCompositeNode.h>
 #include <vtkMRMLSliceLogic.h>
@@ -1004,7 +1005,10 @@ void vtkMRMLAnnotationDisplayableManager::OnMRMLSliceNodeModifiedEvent(vtkMRMLSl
             if (overLineRep)
               {
               overLine->Off();
-              underLine->Off();
+              if (underLine)
+                {
+                underLine->Off();
+                }
 
               double lineOpacity = lineDisplayNode->GetProjectedOpacity();
               double lineColor[3];
@@ -1476,7 +1480,7 @@ bool vtkMRMLAnnotationDisplayableManager::IsWidgetDisplayable(vtkMRMLSliceNode* 
     pokedRenderer->NormalizedDisplayToViewport(coords[0],coords[1]);
     pokedRenderer->ViewportToNormalizedViewport(coords[0],coords[1]);
 
-    if ((coords[0]>0.0) && (coords[1]<1.0) && (coords[1]>0.0) && (coords[1]<1.0))
+    if ((coords[0]>0.0) && (coords[0]<1.0) && (coords[1]>0.0) && (coords[1]<1.0))
       {
       // current point is inside of view
       inViewport = true;
@@ -1518,6 +1522,16 @@ void vtkMRMLAnnotationDisplayableManager::OnInteractorStyleEvent(int eventid)
   else if (eventid == vtkCommand::LeftButtonPressEvent)
     {
 //    vtkWarningMacro("OnInteractorStyleEvent: unhandled left button press event " << eventid);
+    }
+  else if (eventid == vtkCommand::RightButtonReleaseEvent)
+    {
+    // if we're in persistent place mode, go back to view transform mode, but
+    // leave the persistent flag on
+    if (this->GetInteractionNode()->GetCurrentInteractionMode() == vtkMRMLInteractionNode::Place &&
+        this->GetInteractionNode()->GetPlaceModePersistence() == 1)
+      {
+      this->GetInteractionNode()->SwitchToViewTransformMode();
+      }
     }
   else
     {
@@ -1955,13 +1969,13 @@ bool vtkMRMLAnnotationDisplayableManager::IsCorrectDisplayableManager()
     vtkErrorMacro ( "IsCorrectDisplayableManager: No selection node in the scene." );
     return false;
     }
-  if ( selectionNode->GetActiveAnnotationID() == 0)
+  if ( selectionNode->GetActivePlaceNodeClassName() == 0)
     {
     //vtkErrorMacro ( "IsCorrectDisplayableManager: no active annotation");
     return false;
     }
   // the purpose of the displayableManager is hardcoded
-  return this->IsManageable(selectionNode->GetActiveAnnotationID());
+  return this->IsManageable(selectionNode->GetActivePlaceNodeClassName());
 
 }
 
@@ -1972,9 +1986,9 @@ bool vtkMRMLAnnotationDisplayableManager::IsManageable(vtkMRMLNode* node)
 }
 
 //---------------------------------------------------------------------------
-bool vtkMRMLAnnotationDisplayableManager::IsManageable(const char* nodeID)
+bool vtkMRMLAnnotationDisplayableManager::IsManageable(const char* nodeClassName)
 {
-  return nodeID && !strcmp(nodeID, this->m_Focus);
+  return nodeClassName && !strcmp(nodeClassName, this->m_Focus);
 }
 
 //---------------------------------------------------------------------------
@@ -2037,10 +2051,10 @@ void vtkMRMLAnnotationDisplayableManager::GetWorldToLocalCoordinates(vtkMRMLAnno
   vtkMRMLTransformNode* tnode = node->GetParentTransformNode();
   if (tnode != NULL && tnode->IsLinear())
     {
-    vtkSmartPointer<vtkMatrix4x4> transformToWorld = vtkSmartPointer<vtkMatrix4x4>::New();
+    vtkNew<vtkMatrix4x4> transformToWorld;
     transformToWorld->Identity();
     vtkMRMLLinearTransformNode *lnode = vtkMRMLLinearTransformNode::SafeDownCast(tnode);
-    lnode->GetMatrixTransformToWorld(transformToWorld);
+    lnode->GetMatrixTransformToWorld(transformToWorld.GetPointer());
     transformToWorld->Invert();
 
     double p[4];

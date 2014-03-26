@@ -97,7 +97,7 @@ scmrevision ${MY_EXTENSION_WC_REVISION}
 # - The dependencies will be built first
 depends     ${MY_EXTENSION_DEPENDS}
 
-# Inner build directory (default is ".")
+# Inner build directory (default is \".\")
 build_subdirectory ${MY_EXTENSION_BUILD_SUBDIRECTORY}
 
 # homepage
@@ -114,7 +114,7 @@ category    ${MY_EXTENSION_CATEGORY}
 iconurl     ${MY_EXTENSION_ICONURL}
 
 # Give people an idea what to expect from this code
-#  - Is it just a test or something you stand beind?
+#  - Is it just a test or something you stand behind?
 status      ${MY_EXTENSION_STATUS}
 
 # One line stating what the module does

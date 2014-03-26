@@ -25,15 +25,15 @@ set(MODULE_INCLUDE_DIRECTORIES
   )
 
 set(MODULE_SRCS
-  qSlicer${MODULE_NAME}IO.cxx
-  qSlicer${MODULE_NAME}IO.h
   qSlicer${MODULE_NAME}Module.cxx
   qSlicer${MODULE_NAME}Module.h
+  qSlicer${MODULE_NAME}Reader.cxx
+  qSlicer${MODULE_NAME}Reader.h
   )
 
 set(MODULE_MOC_SRCS
-  qSlicer${MODULE_NAME}IO.h
   qSlicer${MODULE_NAME}Module.h
+  qSlicer${MODULE_NAME}Reader.h
   )
 
 set(MODULE_UI_SRCS
@@ -47,7 +47,7 @@ set(MODULE_RESOURCES
   )
 
 #-----------------------------------------------------------------------------
-slicerMacroBuildQtModule(
+slicerMacroBuildLoadableModule(
   NAME ${MODULE_NAME}
   TITLE ${MODULE_TITLE}
   EXPORT_DIRECTIVE ${MODULE_EXPORT_DIRECTIVE}

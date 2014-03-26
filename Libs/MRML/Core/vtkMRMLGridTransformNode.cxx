@@ -12,16 +12,18 @@ Version:   $Revision: 1.14 $
 
 =========================================================================auto=*/
 
-#include <sstream>
-
-#include "vtkObjectFactory.h"
-
-#include "vtkGridTransform.h"
-#include "vtkImageData.h"
-
+// MRML includes
 #include "vtkMRMLGridTransformNode.h"
 
-#include "vtkSmartPointer.h"
+// VTK includes
+#include <vtkGeneralTransform.h>
+#include <vtkGridTransform.h>
+#include <vtkImageData.h>
+#include <vtkNew.h>
+#include <vtkObjectFactory.h>
+
+// STD includes
+#include <sstream>
 
 //----------------------------------------------------------------------------
 vtkMRMLNodeNewMacro(vtkMRMLGridTransformNode);
@@ -29,9 +31,9 @@ vtkMRMLNodeNewMacro(vtkMRMLGridTransformNode);
 //----------------------------------------------------------------------------
 vtkMRMLGridTransformNode::vtkMRMLGridTransformNode()
 {
-  vtkGridTransform *grid = vtkGridTransform::New();
-  this->SetAndObserveWarpTransformToParent(grid);
-  grid->Delete();
+  this->ReadWriteAsTransformToParent = 0;
+  vtkNew<vtkGridTransform> warp;
+  this->SetAndObserveTransformFromParent(warp.GetPointer());
 }
 
 //----------------------------------------------------------------------------
@@ -44,16 +46,20 @@ void vtkMRMLGridTransformNode::WriteXML(ostream& of, int nIndent)
 {
   Superclass::WriteXML(of, nIndent);
 
-  if (this->WarpTransformToParent != NULL)
+  vtkGridTransform* grid=NULL;
+
+  if (this->ReadWriteAsTransformToParent)
+    {
+    grid=vtkGridTransform::SafeDownCast(GetTransformToParentAs("vtkGridTransform"));
+    }
+  else
+    {
+    grid=vtkGridTransform::SafeDownCast(GetTransformFromParentAs("vtkGridTransform"));
+    }
+
+  if (grid != NULL)
     {
     // this transform should be a grid transform
-    vtkGridTransform *grid = dynamic_cast<vtkGridTransform*>(this->WarpTransformToParent);
-    if( grid == NULL )
-      {
-      vtkErrorMacro("Transform is not a GridTransform");
-      return;
-      }
-
     of << " interpolationMode=\"" << grid->GetInterpolationMode() << "\" ";
     of << " displacementScale=\"" << grid->GetDisplacementScale() << "\" ";
     of << " displacementShift=\"" << grid->GetDisplacementShift() << "\" ";
@@ -66,16 +72,20 @@ void vtkMRMLGridTransformNode::WriteXML(ostream& of, int nIndent)
     double* origin = image->GetOrigin();
     of << " origin=\"" << origin[0] << " " << origin[1] << " " << origin[2] << "\" ";
     }
+  else
+    {
+    vtkErrorMacro("vtkMRMLGridTransformNode::WriteXML failed: the transform is not a vtkGridTransform");
+    }
+
 }
 
 //----------------------------------------------------------------------------
 void vtkMRMLGridTransformNode::ReadXMLAttributes(const char** atts)
 {
-
   Superclass::ReadXMLAttributes(atts);
 
-  vtkSmartPointer<vtkGridTransform> vtkgrid = vtkSmartPointer<vtkGridTransform>::New();
-  vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
+  vtkNew<vtkGridTransform> vtkgrid;
+  vtkNew<vtkImageData> image;
   image->Initialize();
   image->SetNumberOfScalarComponents( 3 );
   image->SetScalarTypeToDouble();
@@ -217,8 +227,24 @@ void vtkMRMLGridTransformNode::ReadXMLAttributes(const char** atts)
         }
       }
     }
-  vtkgrid->SetDisplacementGrid( image );
-  this->SetAndObserveWarpTransformToParent( vtkgrid );
+
+  vtkgrid->SetDisplacementGrid(image.GetPointer());
+
+  if( vtkgrid.GetPointer() != 0 )
+    {
+    if (this->ReadWriteAsTransformToParent)
+      {
+      this->SetAndObserveTransformToParent(vtkgrid.GetPointer());
+      }
+    else
+      {
+      this->SetAndObserveTransformFromParent(vtkgrid.GetPointer());
+      }
+    }
+  else
+    {
+    vtkErrorMacro("vtkMRMLGridTransformNode::ReadXML failed: could not create a vtkGridTransform");
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -234,6 +260,5 @@ void vtkMRMLGridTransformNode::PrintSelf(ostream& os, vtkIndent indent)
 {
   Superclass::PrintSelf(os,indent);
 }
-
 
 // End

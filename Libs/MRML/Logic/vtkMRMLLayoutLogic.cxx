@@ -24,6 +24,7 @@
 // MRML includes
 #include "vtkMRMLColors.h"
 #include "vtkMRMLLayoutNode.h"
+#include "vtkMRMLScene.h"
 #include "vtkMRMLSliceNode.h"
 #include "vtkMRMLViewNode.h"
 #include "vtkMRMLChartViewNode.h"
@@ -32,6 +33,7 @@
 #include <vtkCallbackCommand.h>
 #include <vtkCollection.h>
 #include <vtkNew.h>
+#include <vtkObjectFactory.h>
 #include <vtkSmartPointer.h>
 #include <vtkXMLDataElement.h>
 
@@ -512,9 +514,9 @@ const char* twoOverTwoView =
   "    </view>"
   "   </item>"
   "   <item>"
-  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice1\">"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice4\">"
   "     <property name=\"orientation\" action=\"default\">Axial</property>"
-  "     <property name=\"viewlabel\" action=\"default\">1</property>"
+  "     <property name=\"viewlabel\" action=\"default\">4</property>"
   "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
   "    </view>"
   "   </item>"
@@ -586,6 +588,335 @@ const char* sideBySideView =
   "    <property name=\"viewcolor\" action=\"default\">#EDD54C</property>"
   "   </view>"
   "  </item>"
+  "</layout>";
+
+const char* fourByThreeSliceView =
+  "<layout type=\"vertical\">"
+  " <item>"
+  "  <layout type=\"horizontal\">"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Red\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">R</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#F34A33</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+   "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Green\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">G</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#6EB04B</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Yellow\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">Y</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#EDD54C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice4\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">4</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "  </layout>"
+  " </item>"
+  " <item>"
+  "  <layout type=\"horizontal\">"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice5\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">5</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice6\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">6</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice7\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">7</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice8\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">8</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "  </layout>"
+  " </item>"
+  " <item>"
+  "  <layout type=\"horizontal\">"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice9\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">9</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice10\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">10</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice11\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">11</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice12\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">12</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "  </layout>"
+  " </item>"
+  "</layout>";
+
+const char* fourByTwoSliceView =
+  "<layout type=\"vertical\">"
+  " <item>"
+  "  <layout type=\"horizontal\">"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Red\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">R</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#F34A33</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+   "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Green\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">G</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#6EB04B</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Yellow\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">Y</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#EDD54C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice4\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">4</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "  </layout>"
+  " </item>"
+  " <item>"
+  "  <layout type=\"horizontal\">"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice5\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">5</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice6\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">6</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice7\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">7</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice8\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">8</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "  </layout>"
+  " </item>"
+  "</layout>";
+
+const char* fiveByTwoSliceView =
+  "<layout type=\"vertical\">"
+  " <item>"
+  "  <layout type=\"horizontal\">"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Red\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">R</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#F34A33</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+   "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Green\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">G</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#6EB04B</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Yellow\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">Y</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#EDD54C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice4\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">4</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice5\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">5</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "  </layout>"
+  " </item>"
+  " <item>"
+  "  <layout type=\"horizontal\">"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice6\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">6</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice7\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">7</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice8\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">8</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice9\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">9</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice10\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">10</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "  </layout>"
+  " </item>"
+  "</layout>";
+
+const char* threeByThreeSliceView =
+  "<layout type=\"vertical\">"
+  " <item>"
+  "  <layout type=\"horizontal\">"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Red\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">R</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#F34A33</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+   "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Green\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">G</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#6EB04B</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Yellow\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">Y</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#EDD54C</property>"
+  "    </view>"
+  "   </item>"
+  "  </layout>"
+  " </item>"
+  " <item>"
+  "  <layout type=\"horizontal\">"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice4\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">4</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice5\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">5</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice6\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">6</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "  </layout>"
+  " </item>"
+  " <item>"
+  "  <layout type=\"horizontal\">"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice7\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">7</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice8\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">8</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "   <item>"
+  "    <view class=\"vtkMRMLSliceNode\" singletontag=\"Slice9\">"
+  "     <property name=\"orientation\" action=\"default\">Axial</property>"
+  "     <property name=\"viewlabel\" action=\"default\">9</property>"
+  "     <property name=\"viewcolor\" action=\"default\">#8C8C8C</property>"
+  "    </view>"
+  "   </item>"
+  "  </layout>"
+  " </item>"
   "</layout>";
 
 
@@ -1021,6 +1352,14 @@ void vtkMRMLLayoutLogic::AddDefaultLayouts()
                                          threeOverThreeQuantitativeView);
   this->LayoutNode->AddLayoutDescription(vtkMRMLLayoutNode::SlicerLayoutSideBySideView,
                                          sideBySideView);
+  this->LayoutNode->AddLayoutDescription(vtkMRMLLayoutNode::SlicerLayoutFourByThreeSliceView,
+                                         fourByThreeSliceView);
+  this->LayoutNode->AddLayoutDescription(vtkMRMLLayoutNode::SlicerLayoutFourByTwoSliceView,
+                                         fourByTwoSliceView);
+  this->LayoutNode->AddLayoutDescription(vtkMRMLLayoutNode::SlicerLayoutFiveByTwoSliceView,
+                                         fiveByTwoSliceView);
+  this->LayoutNode->AddLayoutDescription(vtkMRMLLayoutNode::SlicerLayoutThreeByThreeSliceView,
+                                         threeByThreeSliceView);
   // add the CompareView modes which are defined programmatically
   this->UpdateCompareViewLayoutDefinitions();
   this->LayoutNode->EndModify(wasModifying);
@@ -1199,6 +1538,47 @@ void vtkMRMLLayoutLogic::ApplyProperty(const ViewProperty& property, vtkMRMLNode
 }
 
 //----------------------------------------------------------------------------
+void vtkMRMLLayoutLogic::MaximizeView(vtkMRMLAbstractViewNode* viewToMaximize)
+{
+  int layout = vtkMRMLLayoutNode::SlicerLayoutMaximizedView;
+  this->CreateMaximizedViewLayoutDescription( layout, viewToMaximize);
+  vtkMRMLLayoutNode* layoutNode = this->GetLayoutNode();
+  if (layoutNode)
+    {
+    layoutNode->SetViewArrangement(layout);
+    }
+}
+
+//----------------------------------------------------------------------------
+void vtkMRMLLayoutLogic
+::CreateMaximizedViewLayoutDescription(int layout,
+                                       vtkMRMLAbstractViewNode* viewToMaximize)
+{
+  vtkMRMLLayoutNode* layoutNode = this->GetLayoutNode();
+  if (!layoutNode)
+    {
+    vtkErrorMacro( << "No layout node");
+    }
+  std::stringstream layoutDescription;
+  layoutDescription <<
+    "<layout type=\"horizontal\">"
+    " <item>"
+    "  <view class=\"" << viewToMaximize->GetClassName() << "\" "
+    "singletontag=\""<< viewToMaximize->GetSingletonTag() << "\">"
+    "  </view>"
+    " </item>"
+    "</layout>";
+  if (layoutNode->IsLayoutDescription(layout))
+    {
+    layoutNode->SetLayoutDescription(layout, layoutDescription.str().c_str());
+    }
+  else
+    {
+    layoutNode->AddLayoutDescription(layout, layoutDescription.str().c_str());
+    }
+}
+
+//----------------------------------------------------------------------------
 vtkMRMLNode* vtkMRMLLayoutLogic::GetViewFromAttributes(const ViewAttributes& attributes)
 {
   vtkSmartPointer<vtkCollection> nodes;
@@ -1217,7 +1597,7 @@ vtkCollection* vtkMRMLLayoutLogic::GetViewsFromAttributes(const ViewAttributes& 
     {
     return NULL;
     }
-  // filter on the class name, that remove a lot of options
+  // filter on the class name to remove a lot of options.
   ViewAttributes::const_iterator it = attributes.find(std::string("class"));
   ViewAttributes::const_iterator end = attributes.end();
   if (it == end)

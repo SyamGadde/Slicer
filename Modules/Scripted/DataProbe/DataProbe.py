@@ -84,7 +84,6 @@ class DataProbeInfoWidget(object):
     self.styleObserverTags = []
     # keep a map of interactor styles to sliceWidgets so we can easily get sliceLogic
     self.sliceWidgetsPerStyle = {}
-    self.refreshObservers()
 
     layoutManager = slicer.app.layoutManager()
     layoutManager.connect('layoutChanged(int)', self.refreshObservers)
@@ -96,6 +95,9 @@ class DataProbeInfoWidget(object):
 
     #Helper class to calculate and display tensor scalars
     self.calculateTensorScalars = CalculateTensorScalars()
+
+    # once everything is set up, refresh the observers
+    self.refreshObservers()
 
 
   def __del__(self):
@@ -159,9 +161,11 @@ class DataProbeInfoWidget(object):
     if volumeNode.GetLabelMap():
       labelIndex = int(imageData.GetScalarComponentAsDouble(ijk[0], ijk[1], ijk[2], 0))
       labelValue = "Unknown"
-      colorNode = volumeNode.GetDisplayNode().GetColorNode()
-      if colorNode:
-        labelValue = colorNode.GetColorName(labelIndex)
+      displayNode = volumeNode.GetDisplayNode()
+      if displayNode:
+        colorNode = displayNode.GetColorNode()
+        if colorNode:
+          labelValue = colorNode.GetColorName(labelIndex)
       return "%s (%d)" % (labelValue, labelIndex)
 
     if volumeNode.IsA("vtkMRMLDiffusionTensorVolumeNode"):
@@ -269,8 +273,8 @@ class DataProbeInfoWidget(object):
         valueLabel = ""
         if volumeNode:
           nameLabel = self.fitName(volumeNode.GetName())
-          xyToIJK = layerLogic.GetXYToIJKTransform().GetMatrix()
-          ijkFloat = xyToIJK.MultiplyPoint(xyz+(1,))[:3]
+          xyToIJK = layerLogic.GetXYToIJKTransform()
+          ijkFloat = xyToIJK.TransformDoublePoint(xyz)
           ijk = []
           for element in ijkFloat:
             try:
@@ -407,40 +411,7 @@ class DataProbeWidget:
     """Generic reload method for any scripted module.
     ModuleWizard will subsitute correct default moduleName.
     """
-    import imp, sys, os, slicer
-
-    widgetName = moduleName + "Widget"
-
-    # reload the source code
-    # - set source file path
-    # - load the module to the global space
-    filePath = eval('slicer.modules.%s.path' % moduleName.lower())
-    p = os.path.dirname(filePath)
-    if not sys.path.__contains__(p):
-      sys.path.insert(0,p)
-    fp = open(filePath, "r")
-    globals()[moduleName] = imp.load_module(
-        moduleName, fp, filePath, ('.py', 'r', imp.PY_SOURCE))
-    fp.close()
-
-    # rebuild the widget
-    # - find and hide the existing widget
-    # - create a new widget in the existing parent
-    parent = slicer.util.findChildren(name='%s Reload' % moduleName)[0].parent()
-    for child in parent.children():
-      try:
-        child.hide()
-      except AttributeError:
-        pass
-    # Remove spacer items
-    item = parent.layout().itemAt(0)
-    while item:
-      parent.layout().removeItem(item)
-      item = parent.layout().itemAt(0)
-    # create new widget inside existing parent
-    globals()[widgetName.lower()] = eval(
-        'globals()["%s"].%s(parent)' % (moduleName, widgetName))
-    globals()[widgetName.lower()].setup()
+    globals()[moduleName] = slicer.util.reloadScriptedModule(moduleName)
 
   def onReloadAndTest(self,moduleName="DataProbe"):
     self.onReload()

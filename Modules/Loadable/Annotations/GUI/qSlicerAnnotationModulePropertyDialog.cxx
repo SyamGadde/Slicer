@@ -11,6 +11,9 @@
 #include <QTabWidget>
 #include <QTableWidget>
 
+// qMRML includes
+#include <qMRMLUtils.h>
+
 // Annotations includes
 #include "vtkMRMLAnnotationAngleNode.h"
 #include "vtkMRMLAnnotationControlPointsNode.h"
@@ -26,8 +29,11 @@
 #include "vtkMRMLFiducialListNode.h"
 #include "vtkSlicerAnnotationModuleLogic.h"
 
+// MRML includes
+#include <vtkMRMLScene.h>
+
 // VTK includes
-#include <vtkSmartPointer.h>
+#include <vtkNew.h>
 
 //------------------------------------------------------------------------------
 qSlicerAnnotationModulePropertyDialog::~qSlicerAnnotationModulePropertyDialog()
@@ -282,7 +288,7 @@ void qSlicerAnnotationModulePropertyDialog::initialize()
   double * unselectedColor = this->m_logic->GetAnnotationTextUnselectedColor(
       this->m_id.c_str());
   QColor unselectedQColor;
-  qSlicerAnnotationModulePropertyDialog::toQColor(unselectedColor,unselectedQColor);
+  qMRMLUtils::colorToQColor(unselectedColor,unselectedQColor);
 
   ui.textUnselectedColorPickerButton->setDisplayColorName(false);
   ui.textUnselectedColorPickerButton->setColor(unselectedQColor);
@@ -292,7 +298,7 @@ void qSlicerAnnotationModulePropertyDialog::initialize()
   double * selectedColor = this->m_logic->GetAnnotationTextSelectedColor(
       this->m_id.c_str());
   QColor selectedQColor;
-  qSlicerAnnotationModulePropertyDialog::toQColor(selectedColor,selectedQColor);
+  qMRMLUtils::colorToQColor(selectedColor,selectedQColor);
 
   ui.textSelectedColorPickerButton->setDisplayColorName(false);
   ui.textSelectedColorPickerButton->setColor(selectedQColor);
@@ -352,7 +358,7 @@ void qSlicerAnnotationModulePropertyDialog::initialize()
     // unselected color
     double *pointUnSelColor = pointDisplayNode->GetColor();
     QColor pointUnSelQColor;
-    qSlicerAnnotationModulePropertyDialog::toQColor(pointUnSelColor,pointUnSelQColor);
+    qMRMLUtils::colorToQColor(pointUnSelColor,pointUnSelQColor);
     ui.pointUnselectedColorPickerButton->setDisplayColorName(false);
     ui.pointUnselectedColorPickerButton->setColor(pointUnSelQColor);
     ui.pointUnselectedColorPickerButton->setDialogOptions(ctkColorPickerButton::UseCTKColorDialog);
@@ -360,7 +366,7 @@ void qSlicerAnnotationModulePropertyDialog::initialize()
     // selected color
     double *pointSelColor = pointDisplayNode->GetSelectedColor();
     QColor pointSelQColor;
-    qSlicerAnnotationModulePropertyDialog::toQColor(pointSelColor, pointSelQColor);
+    qMRMLUtils::colorToQColor(pointSelColor, pointSelQColor);
     ui.pointSelectedColorPickerButton->setDisplayColorName(false);
     ui.pointSelectedColorPickerButton->setColor(pointSelQColor);
     ui.pointSelectedColorPickerButton->setDialogOptions(ctkColorPickerButton::UseCTKColorDialog);
@@ -435,7 +441,7 @@ void qSlicerAnnotationModulePropertyDialog::initialize()
     // unselected
     double *lineUnSelColor = lineDisplayNode->GetColor();
     QColor lineUnSelQColor;
-    qSlicerAnnotationModulePropertyDialog::toQColor(lineUnSelColor,lineUnSelQColor);
+    qMRMLUtils::colorToQColor(lineUnSelColor,lineUnSelQColor);
     ui.lineUnselectedColorPickerButton->setDisplayColorName(false);
     ui.lineUnselectedColorPickerButton->setColor(lineUnSelQColor);
     ui.lineUnselectedColorPickerButton->setDialogOptions(ctkColorPickerButton::UseCTKColorDialog);
@@ -443,7 +449,7 @@ void qSlicerAnnotationModulePropertyDialog::initialize()
     // selected
     double *lineSelColor = lineDisplayNode->GetSelectedColor();
     QColor lineSelQColor;
-    qSlicerAnnotationModulePropertyDialog::toQColor(lineSelColor, lineSelQColor);
+    qMRMLUtils::colorToQColor(lineSelColor, lineSelQColor);
     ui.lineSelectedColorPickerButton->setDisplayColorName(false);
     ui.lineSelectedColorPickerButton->setColor(lineSelQColor);
     ui.lineSelectedColorPickerButton->setDialogOptions(ctkColorPickerButton::UseCTKColorDialog);
@@ -894,7 +900,7 @@ void qSlicerAnnotationModulePropertyDialog::undo(vtkMRMLNode* node)
 void qSlicerAnnotationModulePropertyDialog::onTextUnselectedColorChanged(QColor qcolor)
 {
   double color[3];
-  qSlicerAnnotationModulePropertyDialog::toColor(qcolor, color);
+  qMRMLUtils::qColorToColor(qcolor, color);
 
   this->m_logic->SetAnnotationTextUnselectedColor(this->m_id.c_str(),color);
 }
@@ -903,7 +909,7 @@ void qSlicerAnnotationModulePropertyDialog::onTextUnselectedColorChanged(QColor 
 void qSlicerAnnotationModulePropertyDialog::onTextSelectedColorChanged(QColor qcolor)
 {
   double color[3];
-  qSlicerAnnotationModulePropertyDialog::toColor(qcolor, color);
+  qMRMLUtils::qColorToColor(qcolor, color);
 
   this->m_logic->SetAnnotationTextSelectedColor(this->m_id.c_str(),color);
 }
@@ -1046,7 +1052,7 @@ void qSlicerAnnotationModulePropertyDialog::onPointsTableWidgetChanged(QTableWid
 void qSlicerAnnotationModulePropertyDialog::onPointColorChanged(QColor qcolor)
 {
   double color[3];
-  qSlicerAnnotationModulePropertyDialog::toColor(qcolor, color);
+  qMRMLUtils::qColorToColor(qcolor, color);
 
   this->m_logic->SetAnnotationPointUnselectedColor(this->m_id.c_str(),color);
 }
@@ -1055,7 +1061,7 @@ void qSlicerAnnotationModulePropertyDialog::onPointColorChanged(QColor qcolor)
 void qSlicerAnnotationModulePropertyDialog::onPointSelectedColorChanged(QColor qcolor)
 {
   double color[3];
-  qSlicerAnnotationModulePropertyDialog::toColor(qcolor, color);
+  qMRMLUtils::qColorToColor(qcolor, color);
 
   this->m_logic->SetAnnotationPointColor(this->m_id.c_str(),color);
 }
@@ -1161,7 +1167,7 @@ void qSlicerAnnotationModulePropertyDialog::onPointGlyphChanged(QString value)
 void qSlicerAnnotationModulePropertyDialog::onLineColorChanged(QColor qcolor)
 {
   double color[3];
-  qSlicerAnnotationModulePropertyDialog::toColor(qcolor, color);
+  qMRMLUtils::qColorToColor(qcolor, color);
 
   this->m_logic->SetAnnotationLineUnselectedColor(this->m_id.c_str(),color);
 }
@@ -1170,7 +1176,7 @@ void qSlicerAnnotationModulePropertyDialog::onLineColorChanged(QColor qcolor)
 void qSlicerAnnotationModulePropertyDialog::onLineSelectedColorChanged(QColor qcolor)
 {
   double color[3];
-  qSlicerAnnotationModulePropertyDialog::toColor(qcolor, color);
+  qMRMLUtils::qColorToColor(qcolor, color);
 
   this->m_logic->SetAnnotationLineColor(this->m_id.c_str(),color);
 }
@@ -1366,15 +1372,6 @@ void qSlicerAnnotationModulePropertyDialog::updateLockUnlockStatus(bool isLock)
 
 }
 
-//-----------------------------------------------------------------------------
-void qSlicerAnnotationModulePropertyDialog::toQColor(const double* color, QColor &qcolor)
-{
-  if ( color )
-    {
-    qcolor = QColor::fromRgbF(color[0], color[1], color[2]);
-    }
-}
-
 //------------------------------------------------------------------------------
 void qSlicerAnnotationModulePropertyDialog::formatValueToChar(const char* format, std::vector<
     double> vv, QString &valueString)
@@ -1391,14 +1388,6 @@ void qSlicerAnnotationModulePropertyDialog::formatValueToChar(const char* format
       }
 
   //valueString = valuechar;
-}
-
-//------------------------------------------------------------------------------
-void qSlicerAnnotationModulePropertyDialog::toColor(const QColor &qcolor, double* color)
-{
-  color[0] = qcolor.redF();
-  color[1] = qcolor.greenF();
-  color[2] = qcolor.blueF();
 }
 
 //-----------------------------------------------------------------------------
@@ -1421,12 +1410,12 @@ void qSlicerAnnotationModulePropertyDialog::getAllColor(QColor &qcolor)
       double *hierarchyColor = hierarchyNode->GetDisplayNode()->GetColor();
       if (hierarchyColor)
         {
-        this->toQColor(hierarchyColor, qcolor);
+        qMRMLUtils::colorToQColor(hierarchyColor, qcolor);
         }
       }
     return;
     }
-  
+
   vtkMRMLDisplayableNode *displayableNode = vtkMRMLDisplayableNode::SafeDownCast(mrmlNode);
   if (!displayableNode)
     {
@@ -1461,7 +1450,7 @@ void qSlicerAnnotationModulePropertyDialog::getAllColor(QColor &qcolor)
 
   if (allTheSame)
     {
-    qSlicerAnnotationModulePropertyDialog::toQColor(firstColor, qcolor); 
+    qMRMLUtils::colorToQColor(firstColor, qcolor);
     }
 }
 //-----------------------------------------------------------------------------
@@ -1592,7 +1581,7 @@ void qSlicerAnnotationModulePropertyDialog::onNameLineEditChanged()
 void qSlicerAnnotationModulePropertyDialog::onAllColorChanged(QColor qcolor)
 {
   double color[3];
-  qSlicerAnnotationModulePropertyDialog::toColor(qcolor, color);
+  qMRMLUtils::qColorToColor(qcolor, color);
 
   // is it a hierarchy node?
   if (this->m_logic->IsAnnotationHierarchyNode(this->m_id))
@@ -1642,7 +1631,7 @@ void qSlicerAnnotationModulePropertyDialog::setColorOnAnnotationDisplayNodes(con
     return;
     }
   double color[3];
-  qSlicerAnnotationModulePropertyDialog::toColor(qcolor, color);
+  qMRMLUtils::qColorToColor(qcolor, color);
   // get the text display node
   vtkMRMLAnnotationTextDisplayNode *textDisplayNode = this->m_logic->GetTextDisplayNode(id);
   if (textDisplayNode)
@@ -1819,7 +1808,7 @@ void qSlicerAnnotationModulePropertyDialog::onHierarchyPointGlyphTypeDefaultButt
 void qSlicerAnnotationModulePropertyDialog::onSizeSmallPushButtonClicked()
 {
   // get and use the default sizes from the display nodes and scale them down
-  vtkSmartPointer<vtkMRMLAnnotationTextDisplayNode> defaultTextDisplayNode = vtkSmartPointer<vtkMRMLAnnotationTextDisplayNode>::New();
+  vtkNew<vtkMRMLAnnotationTextDisplayNode> defaultTextDisplayNode;
   double defaultTextSize = defaultTextDisplayNode->GetTextScale();
   vtkMRMLAnnotationTextDisplayNode *textDisplayNode = this->m_logic->GetTextDisplayNode(this->m_id.c_str());
   if (textDisplayNode)
@@ -1827,7 +1816,7 @@ void qSlicerAnnotationModulePropertyDialog::onSizeSmallPushButtonClicked()
     textDisplayNode->SetTextScale(defaultTextSize / 2.0);
     }
 
-  vtkSmartPointer<vtkMRMLAnnotationPointDisplayNode> defaultPointDisplayNode = vtkSmartPointer<vtkMRMLAnnotationPointDisplayNode>::New();
+  vtkNew<vtkMRMLAnnotationPointDisplayNode> defaultPointDisplayNode;
   double defaultPointSize = defaultPointDisplayNode->GetGlyphScale();
   vtkMRMLAnnotationPointDisplayNode *pointDisplayNode = this->m_logic->GetPointDisplayNode(this->m_id.c_str());
   if (pointDisplayNode)
@@ -1840,7 +1829,7 @@ void qSlicerAnnotationModulePropertyDialog::onSizeSmallPushButtonClicked()
 void qSlicerAnnotationModulePropertyDialog:: onSizeMediumPushButtonClicked()
 {
   // get and use the default sizes from the display nodes and scale them down
-  vtkSmartPointer<vtkMRMLAnnotationTextDisplayNode> defaultTextDisplayNode = vtkSmartPointer<vtkMRMLAnnotationTextDisplayNode>::New();
+  vtkNew<vtkMRMLAnnotationTextDisplayNode> defaultTextDisplayNode;
   double defaultTextSize = defaultTextDisplayNode->GetTextScale();
   vtkMRMLAnnotationTextDisplayNode *textDisplayNode = this->m_logic->GetTextDisplayNode(this->m_id.c_str());
   if (textDisplayNode)
@@ -1848,7 +1837,7 @@ void qSlicerAnnotationModulePropertyDialog:: onSizeMediumPushButtonClicked()
     textDisplayNode->SetTextScale(defaultTextSize * 0.75);
     }
 
-  vtkSmartPointer<vtkMRMLAnnotationPointDisplayNode> defaultPointDisplayNode = vtkSmartPointer<vtkMRMLAnnotationPointDisplayNode>::New();
+  vtkNew<vtkMRMLAnnotationPointDisplayNode> defaultPointDisplayNode;
   double defaultPointSize = defaultPointDisplayNode->GetGlyphScale();
   vtkMRMLAnnotationPointDisplayNode *pointDisplayNode = this->m_logic->GetPointDisplayNode(this->m_id.c_str());
   if (pointDisplayNode)
@@ -1861,7 +1850,7 @@ void qSlicerAnnotationModulePropertyDialog:: onSizeMediumPushButtonClicked()
 void qSlicerAnnotationModulePropertyDialog:: onSizeLargePushButtonClicked()
 {
   // get and use the default sizes from the display nodes 
-  vtkSmartPointer<vtkMRMLAnnotationTextDisplayNode> defaultTextDisplayNode = vtkSmartPointer<vtkMRMLAnnotationTextDisplayNode>::New();
+  vtkNew<vtkMRMLAnnotationTextDisplayNode> defaultTextDisplayNode;
   double defaultTextSize = defaultTextDisplayNode->GetTextScale();
   vtkMRMLAnnotationTextDisplayNode *textDisplayNode = this->m_logic->GetTextDisplayNode(this->m_id.c_str());
   if (textDisplayNode)
@@ -1869,7 +1858,7 @@ void qSlicerAnnotationModulePropertyDialog:: onSizeLargePushButtonClicked()
     textDisplayNode->SetTextScale(defaultTextSize);
     }
 
-  vtkSmartPointer<vtkMRMLAnnotationPointDisplayNode> defaultPointDisplayNode = vtkSmartPointer<vtkMRMLAnnotationPointDisplayNode>::New();
+  vtkNew<vtkMRMLAnnotationPointDisplayNode> defaultPointDisplayNode;
   double defaultPointSize = defaultPointDisplayNode->GetGlyphScale();
   vtkMRMLAnnotationPointDisplayNode *pointDisplayNode = this->m_logic->GetPointDisplayNode(this->m_id.c_str());
   if (pointDisplayNode)

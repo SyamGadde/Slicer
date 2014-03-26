@@ -96,8 +96,7 @@ public:
   /// in the node selectors.
   void ApplyAndWait ( vtkMRMLCommandLineModuleNode* node, bool updateDisplay = true);
 
-  /// Set/Get the directory to use for temporary files
-  void SetTemporaryDirectory(const char *tempdir);
+  void KillProcesses();
 
 //   void LazyEvaluateModuleTarget(ModuleDescription& moduleDescriptionObject);
 //   void LazyEvaluateModuleTarget(vtkMRMLCommandLineModuleNode* node)
