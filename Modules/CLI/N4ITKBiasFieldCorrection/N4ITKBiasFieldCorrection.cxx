@@ -62,18 +62,6 @@ typedef std::vector<double> doublevec;
 typedef std::pair<doublevec *, doublevec *> histogrampair;
 
 template<class TImage>
-histogrampair * create_histogram( const TImage * inputImage, int numbins)
-{
-  return create_histogram_aux(inputImage, numbins, false, 0, false, 0);
-}
-
-template<class TImage>
-histogrampair * create_histogram( const TImage * inputImage, int numbins, typename TImage::PixelType upperthreshold, typename TImage::PixelType lowerthreshold)
-{
-  return create_histogram_aux(inputImage, numbins, true, upperthreshold, true, lowerthreshold);
-}
-
-template<class TImage>
 histogrampair * create_histogram_aux( const TImage * inputImage, int numbins, bool uselowerthreshold, typename TImage::PixelType lowerthreshold, bool useupperthreshold, typename TImage::PixelType upperthreshold)
 {
   // histogram code (from OtsuImageThreshold)
@@ -171,6 +159,18 @@ histogrampair * create_histogram_aux( const TImage * inputImage, int numbins, bo
     }
 
   return new histogrampair(relativeFrequencyPtr, binBoundariesPtr);
+}
+
+template<class TImage>
+histogrampair * create_histogram( const TImage * inputImage, int numbins, typename TImage::PixelType upperthreshold, typename TImage::PixelType lowerthreshold)
+{
+  return create_histogram_aux(inputImage, numbins, true, upperthreshold, true, lowerthreshold);
+}
+
+template<class TImage>
+histogrampair * create_histogram( const TImage * inputImage, int numbins)
+{
+  return create_histogram_aux(inputImage, numbins, false, 0, false, 0);
 }
 
 void
