@@ -91,6 +91,7 @@ if(NOT DEFINED CTK_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
       -DCTK_USE_QTTESTING:BOOL=${Slicer_USE_QtTesting}
       -DGIT_EXECUTABLE:FILEPATH=${GIT_EXECUTABLE}
       ${EXTERNAL_PROJECT_OPTIONAL_ARGS}
+    PATCH_COMMAND perl -p -i -e "s/^(install\\(EXPORT CTKExports DESTINATION \\\$\\{CTK_INSTALL_CMAKE_DIR\\}\\))\$/\#\\1/" CMake/LastConfigureStep/CTKGenerateCTKConfig.cmake
     INSTALL_COMMAND ""
     DEPENDS
       ${${proj}_DEPENDENCIES}

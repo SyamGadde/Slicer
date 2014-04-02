@@ -57,6 +57,7 @@ if(NOT DEFINED SlicerExecutionModel_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM
       -DSlicerExecutionModel_DEFAULT_CLI_INSTALL_ARCHIVE_DESTINATION:STRING=${Slicer_INSTALL_CLIMODULES_LIB_DIR}
       ${EXTERNAL_PROJECT_OPTIONAL_ARGS}
     INSTALL_COMMAND ""
+    PATCH_COMMAND perl -i -e "local \$/$<SEMICOLON> \$t = <>$<SEMICOLON> \$t =~ s/if\\(NOT LOCAL_SEM_EXECUTABLE_ONLY\\)\\s+set\\(cli_library_type SHARED\\)\\s+set\\(cli_executable_compile_flags \"\"\\)/if(NOT LOCAL_SEM_EXECUTABLE_ONLY)\\n    if(BUILD_SHARED_LIBS)\\n      set(cli_library_type SHARED)\\n      set(cli_executable_compile_flags \"\")\\n    else()\\n       set(cli_library_type STATIC)\\n      set(cli_executable_compile_flags \"-DMODULE_STATIC\")\\n    endif()/s$<SEMICOLON> print \$t" CMake/SEMMacroBuildCLI.cmake
     DEPENDS
       ${${proj}_DEPENDENCIES}
     )

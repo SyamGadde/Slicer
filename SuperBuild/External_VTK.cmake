@@ -65,6 +65,7 @@ if((NOT DEFINED VTK_DIR OR NOT DEFINED VTK_SOURCE_DIR) AND NOT ${CMAKE_PROJECT_N
       -DVTK_USE_QVTK_QTOPENGL:BOOL=ON
       -DVTK_USE_QT:BOOL=ON
       -DQT_QMAKE_EXECUTABLE:FILEPATH=${QT_QMAKE_EXECUTABLE}
+      -DVTK_REQUIRED_OBJCXX_FLAGS:STRING=
       )
   endif()
 
@@ -153,9 +154,17 @@ if((NOT DEFINED VTK_DIR OR NOT DEFINED VTK_SOURCE_DIR) AND NOT ${CMAKE_PROJECT_N
   if(WIN32)
     set(PNG_LIBRARY ${PNG_LIBRARY_DIR}/vtkpng.lib)
   elseif(APPLE)
-    set(PNG_LIBRARY ${PNG_LIBRARY_DIR}/libvtkpng.dylib)
+    if(BUILD_SHARED_LIBS)
+      set(PNG_LIBRARY ${PNG_LIBRARY_DIR}/libvtkpng.dylib)
+    else()
+      set(PNG_LIBRARY ${PNG_LIBRARY_DIR}/libvtkpng.a)
+    endif()
   else()
-    set(PNG_LIBRARY ${PNG_LIBRARY_DIR}/libvtkpng.so)
+    if(BUILD_SHARED_LIBS)
+      set(PNG_LIBRARY ${PNG_LIBRARY_DIR}/libvtkpng.so)
+    else()
+      set(PNG_LIBRARY ${PNG_LIBRARY_DIR}/libvtkpng.a)
+    endif()
   endif()
 
 else()

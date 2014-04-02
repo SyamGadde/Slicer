@@ -52,7 +52,11 @@ set(srcs
 # --------------------------------------------------------------------------
 set(lib_name ${PROJECT_NAME})
 
-add_library(${lib_name} SHARED ${srcs})
+if(BUILD_SHARED_LIBS)
+  add_library(${lib_name} SHARED ${srcs})
+else()
+  add_library(${lib_name} STATIC ${srcs})
+endif()
 
 set(libs
   ${ITK_LIBRARIES}
