@@ -484,12 +484,28 @@ int main(int argc, char* * argv)
       typedef itk::BinaryErodeImageFilter <MaskImageType, MaskImageType, BallType> BinaryErodeImageFilterType;
       typedef itk::BinaryFillholeImageFilter <MaskImageType> BinaryFillholeImageFilterType;
       typedef itk::MaskImageFilter <MaskImageType, MaskImageType> MaskImageFilterType;
+      size_t sepind = outputMaskName.find(
+#if(WIN32)
+	  '\\',
+#else
+	  '/'
+#endif
+	  );
+      std::string outputMaskDir;
+      std::string outputMaskFileName;
+      if (sepind == std::npos) {
+	  outputMaskDir = "";
+	  outputMaskFileName = outputMaskName;
+      } else {
+	  outputMaskDir = outputMaskName.substr(0, sepind + 1);
+	  outputMaskFileName = outputMaskName.substr(sepind + 1);
+      }
 
       if( outputMaskName != "" )
 	{
 	  typedef itk::ImageFileWriter<MaskImageType> WriterType;
 	  WriterType::Pointer writer = WriterType::New();
-	  writer->SetFileName( (std::string("origmask-") + outputMaskName).c_str() );
+	  writer->SetFileName( (outputMaskDir + std::string("origmask-") + outputMaskFileName).c_str() );
 	  writer->SetInput( maskImage );
 	  writer->SetUseCompression(1);
 	  writer->Update();
@@ -505,7 +521,7 @@ int main(int argc, char* * argv)
 	{
 	  typedef itk::ImageFileWriter<MaskImageType> WriterType;
 	  WriterType::Pointer writer = WriterType::New();
-	  writer->SetFileName( (std::string("filledmask-") + outputMaskName).c_str() );
+	  writer->SetFileName( (outputMaskDir + std::string("filledmask-") + outputMaskFileName).c_str() );
 	  writer->SetInput( filledmask );
 	  writer->SetUseCompression(1);
 	  writer->Update();
@@ -522,7 +538,7 @@ int main(int argc, char* * argv)
 	{
 	  typedef itk::ImageFileWriter<MaskImageType> WriterType;
 	  WriterType::Pointer writer = WriterType::New();
-	  writer->SetFileName( (std::string("mask-") + outputMaskName).c_str() );
+	  writer->SetFileName( (outputMaskDir + std::string("mask-") + outputMaskFileName).c_str() );
 	  writer->SetInput( erodedmask );
 	  writer->SetUseCompression(1);
 	  writer->Update();
@@ -539,7 +555,7 @@ int main(int argc, char* * argv)
 	{
 	  typedef itk::ImageFileWriter<MaskImageType> WriterType;
 	  WriterType::Pointer writer = WriterType::New();
-	  writer->SetFileName( (std::string("marker-") + outputMaskName).c_str() );
+	  writer->SetFileName( (outputMaskDir + std::string("marker-") + outputMaskFileName).c_str() );
 	  writer->SetInput( markermask );
 	  writer->SetUseCompression(1);
 	  writer->Update();
