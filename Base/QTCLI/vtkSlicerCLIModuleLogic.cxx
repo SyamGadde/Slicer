@@ -33,7 +33,9 @@
 #include <vtkIntArray.h>
 #include <vtkMultiThreader.h>
 #include <vtkNew.h>
+#include <vtkObjectFactory.h>
 #include <vtkStringArray.h>
+#include <vtksys/SystemTools.hxx>
 
 // ITKSYS includes
 #include <itksys/Process.h>
@@ -197,7 +199,9 @@ public:
   {
     return new vtkSlicerCLIEditTransformHierarchyCallback;
   }
-  virtual void Execute(vtkObject* caller, unsigned long eid, void *callData)
+  virtual void Execute(vtkObject* vtkNotUsed(caller),
+                       unsigned long vtkNotUsed(eid),
+                       void * vtkNotUsed(callData))
   {
     vtkMRMLNode *nd =  this->CLIModuleLogic->GetMRMLScene()->GetNodeByID(this->NodeID.c_str());
     vtkMRMLTransformableNode *tnd = vtkMRMLTransformableNode::SafeDownCast(nd);
@@ -207,7 +211,7 @@ public:
       tnd->SetAndObserveTransformNodeID(this->TransformNodeID.c_str());
       this->CLIModuleLogic->GetMRMLScene()->Edited();
     }
-}
+  }
 
   void SetCLIModuleLogic(vtkSlicerCLIModuleLogic* logic)
   {
@@ -252,7 +256,8 @@ public:
 
   int RedirectModuleStreams;
 
-  std::string TemporaryDirectory;
+  itk::MutexLock::Pointer ProcessesKillLock;
+  std::vector<itksysProcess*> Processes;
 
   typedef std::vector<std::pair<int, vtkMRMLCommandLineModuleNode*> > RequestType;
   struct FindRequest
@@ -348,6 +353,7 @@ vtkSlicerCLIModuleLogic::vtkSlicerCLIModuleLogic()
 {
   this->Internal = new vtkInternal();
 
+  this->Internal->ProcessesKillLock = itk::MutexLock::New();
   this->Internal->DeleteTemporaryFiles = 1;
   this->Internal->RedirectModuleStreams = 1;
   this->Internal->RescheduleCallback =
@@ -392,6 +398,8 @@ vtkMRMLCommandLineModuleNode* vtkSlicerCLIModuleLogic::CreateNode()
 {
   vtkMRMLCommandLineModuleNode* node = vtkMRMLCommandLineModuleNode::SafeDownCast(
     this->GetMRMLScene()->CreateNodeByClass("vtkMRMLCommandLineModuleNode"));
+  node->SetName(this->GetMRMLScene()->GetUniqueNameByString(
+                  this->Internal->DefaultModuleDescription.GetTitle().c_str()));
   node->SetModuleDescription(this->Internal->DefaultModuleDescription);
   return node;
 }
@@ -498,7 +506,14 @@ vtkSlicerCLIModuleLogic
 
   // By default, the filename is based on the temporary directory and
   // the pid
-  fname = this->Internal->TemporaryDirectory + "/" + pid + "_" + fname + ".mrml";
+  // by default use the current directory
+  std::string temporaryDirectory = ".";
+  vtkSlicerApplicationLogic* appLogic = this->GetApplicationLogic();
+  if (appLogic)
+    {
+    temporaryDirectory = appLogic->GetTemporaryPath();
+    }
+  fname = temporaryDirectory + "/" + pid + "_" + fname + ".mrml";
 
   return fname;
 }
@@ -567,7 +582,13 @@ vtkSlicerCLIModuleLogic
 
   // By default, the filename is based on the temporary directory and
   // the pid
-  fname = this->Internal->TemporaryDirectory + "/" + pid + "_" + fname;
+  std::string temporaryDirectory = ".";
+  vtkSlicerApplicationLogic* appLogic = this->GetApplicationLogic();
+  if (appLogic)
+    {
+    temporaryDirectory = appLogic->GetTemporaryPath();
+    }
+  fname = temporaryDirectory + "/" + pid + "_" + fname;
 
   if (tag == "image")
     {
@@ -681,9 +702,17 @@ void vtkSlicerCLIModuleLogic::ApplyAndWait ( vtkMRMLCommandLineModuleNode* node,
 }
 
 //-----------------------------------------------------------------------------
-void vtkSlicerCLIModuleLogic::SetTemporaryDirectory(const char *tempdir)
+void vtkSlicerCLIModuleLogic::KillProcesses()
 {
-  this->Internal->TemporaryDirectory = tempdir;
+  this->Internal->ProcessesKillLock->Lock();
+  for (std::vector<itksysProcess*>::iterator it = this->Internal->Processes.begin();
+       it != this->Internal->Processes.end();
+       ++it)
+    {
+    itksysProcess* process = *it;
+    itksysProcess_Kill(process);
+    }
+  this->Internal->ProcessesKillLock->Unlock();
 }
 
 //-----------------------------------------------------------------------------
@@ -698,7 +727,7 @@ void vtkSlicerCLIModuleLogic::Apply ( vtkMRMLCommandLineModuleNode* node, bool u
     }
 
 
-  vtkSlicerTask* task = vtkSlicerTask::New();
+  vtkNew<vtkSlicerTask> task;
   task->SetTypeToProcessing();
 
   // Pass the current node as client data to the task.  This allows
@@ -722,7 +751,7 @@ void vtkSlicerCLIModuleLogic::Apply ( vtkMRMLCommandLineModuleNode* node, bool u
     this, this->GetMRMLLogicsCallbackCommand());
 
   // Schedule the task
-  ret = this->GetApplicationLogic()->ScheduleTask( task );
+  ret = this->GetApplicationLogic()->ScheduleTask( task.GetPointer() );
 
   if (!ret)
     {
@@ -732,9 +761,6 @@ void vtkSlicerCLIModuleLogic::Apply ( vtkMRMLCommandLineModuleNode* node, bool u
     {
     node->SetStatus(vtkMRMLCommandLineModuleNode::Scheduled);
     }
-
-  task->Delete();
-
 }
 
 //-----------------------------------------------------------------------------
@@ -884,9 +910,9 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
   // Mini-scene used to communicate a subset of the main scene to the module
   // Additional handling is necessary because we use SmartPointers
   // (see http://slicer.spl.harvard.edu/slicerWiki/index.php/Slicer3:Memory_Management#SmartPointers)
-  vtkSmartPointer<vtkMRMLScene> miniscene = vtkSmartPointer<vtkMRMLScene>::New();
+  vtkNew<vtkMRMLScene> miniscene;
   std::string minisceneFilename
-    = this->ConstructTemporarySceneFileName(miniscene);
+    = this->ConstructTemporarySceneFileName(miniscene.GetPointer());
 
   // vector of files to delete
   std::set<std::string> filesToDelete;
@@ -1020,13 +1046,11 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
       {
       // Transform nodes will use either a storage node OR a miniscene
 
-      std::string::size_type loc = (*id2fn0).second.find_last_of(".");
-      if (loc != std::string::npos)
+      std::string extension = vtksys::SystemTools::LowerCase( vtksys::SystemTools::GetFilenameLastExtension((*id2fn0).second) );
+      if (!extension.empty())
         {
         // if we start passing pointers to MRML transforms, then we'll
         // need an additional check/case
-        std::string extension = (*id2fn0).second.substr(loc);
-
         if (extension == ".mrml")
           {
           // not using a storage node.  using a mini-scene to transfer
@@ -1094,13 +1118,11 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
 
     if (tnd || mhnd)
       {
-      std::string::size_type loc = (*id2fn0).second.find_last_of(".");
-      if (loc != std::string::npos)
+      std::string extension = vtksys::SystemTools::LowerCase( vtksys::SystemTools::GetFilenameLastExtension((*id2fn0).second) );
+      if (!extension.empty())
         {
         // if we start passing pointers to MRML transforms, then we'll
         // need an additional check/case
-        std::string extension = (*id2fn0).second.substr(loc);
-
         if (extension == ".mrml")
           {
           // put this transform node in the miniscene
@@ -1209,8 +1231,14 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
       {
       code << alphanum[rand() % (sizeof(alphanum)-1)];
       }
-
-    std::string returnFile = this->Internal->TemporaryDirectory + "/" + pidString.str()
+    // by default use the current directory
+    std::string temporaryDirectory = ".";
+    vtkSlicerApplicationLogic* appLogic = this->GetApplicationLogic();
+    if (appLogic)
+      {
+      temporaryDirectory = appLogic->GetTemporaryPath();
+      }
+    std::string returnFile = temporaryDirectory + "/" + pidString.str()
       + "_" + code.str() + ".params";
 
     commandLineAsString.push_back( returnFile );
@@ -1350,12 +1378,26 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
           }
         if ((*pit).GetTag() == "point")
           {
+          // check for a coordinate system flag
+          std::string coordinateSystemStr = (*pit).GetCoordinateSystem();
+          // markups storage has RAS as 0, LPS as 1, IJK as 2
+          int coordinateSystemFlag = 0;
+          if (coordinateSystemStr.compare("lps") == 0)
+            {
+            coordinateSystemFlag = 1;
+            }
+          else if (coordinateSystemStr.compare("ijk") == 0)
+            {
+            coordinateSystemFlag = 2;
+            }
+
           // get the fiducial list node
           vtkMRMLNode *node
             = this->GetMRMLScene()->GetNodeByID((*pit).GetDefault().c_str());
           vtkMRMLFiducialListNode *fiducials
             = vtkMRMLFiducialListNode::SafeDownCast(node);
           vtkMRMLDisplayableHierarchyNode *points = vtkMRMLDisplayableHierarchyNode::SafeDownCast(node);
+          vtkMRMLDisplayableNode *markups = vtkMRMLDisplayableNode::SafeDownCast(node);
           if (fiducials)
             {
             // check to see if module can handle more than one point
@@ -1393,18 +1435,28 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
               vtkErrorMacro("Module does not support multiple fiducials.");
               }
             }
+          else if (markups && markups->IsA("vtkMRMLMarkupsNode"))
+            {
+            int multipleFlag = 1;
+            if ((*pit).GetMultiple() == "false")
+              {
+              multipleFlag = 0;
+              }
+            markups->WriteCLI(commandLineAsString, prefix+flag, coordinateSystemFlag, multipleFlag);
+            }
           else if (points)
             {
             // find the children of this hierarchy node
-            vtkSmartPointer<vtkCollection> col = vtkSmartPointer<vtkCollection>::New();
-            points->GetChildrenDisplayableNodes(col);
+            vtkNew<vtkCollection> col;
+            points->GetChildrenDisplayableNodes(col.GetPointer());
             vtkDebugMacro("Getting children displayable nodes from points " << points->GetID());
-            unsigned int numChildren = 0;
-            if (col)
-              {
-              numChildren = col->GetNumberOfItems();
-              }
+            unsigned int numChildren = col->GetNumberOfItems();
             vtkDebugMacro("Displayable hierarchy has " << numChildren << " child nodes");
+            int multipleFlag = 1;
+            if ((*pit).GetMultiple() == "false")
+              {
+              multipleFlag = 0;
+              }
             for (unsigned int c = 0; c < numChildren; c++)
               {
               // the hierarchy nodes have a sorting index that's respected by
@@ -1422,10 +1474,12 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
                 if (displayableNode)
                   {
                   vtkDebugMacro("Found displayable node with id " << displayableNode->GetID());
-                  std::ostringstream ss;
-                  displayableNode->WriteCLI(ss, prefix+flag);
-                  vtkDebugMacro("WriteCL output = " << ss.str());
-                  commandLineAsString.push_back(ss.str());
+                  displayableNode->WriteCLI(commandLineAsString, prefix+flag, coordinateSystemFlag);
+                  if (multipleFlag == 0)
+                    {
+                    // only write out the first child in the hierarchy
+                    break;
+                    }
                   }
                 }
               }
@@ -1434,11 +1488,34 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
           }
         if ((*pit).GetTag() == "region")
           {
+          // check for a coordinate system flag
+          std::string coordinateSystemStr = (*pit).GetCoordinateSystem();
+          // markups storage has RAS as 0, LPS as 1, IJK as 2
+          int coordinateSystemFlag = 0;
+          if (coordinateSystemStr.compare("lps") == 0)
+            {
+            coordinateSystemFlag = 1;
+            }
+          else if (coordinateSystemStr.compare("ijk") == 0)
+            {
+            coordinateSystemFlag = 2;
+            }
+
+          // check multiple flag
+          int multipleFlag = 1;
+          if ((*pit).GetMultiple() == "false")
+            {
+            multipleFlag = 0;
+            }
+
           // get the region node
           vtkMRMLNode *node
             = this->GetMRMLScene()->GetNodeByID((*pit).GetDefault().c_str());
           vtkMRMLROIListNode *regions = vtkMRMLROIListNode::SafeDownCast(node);
 
+          vtkMRMLDisplayableHierarchyNode *points = vtkMRMLDisplayableHierarchyNode::SafeDownCast(node);
+          vtkMRMLDisplayableNode *roi = vtkMRMLDisplayableNode::SafeDownCast(node);
+ 
           if (regions)
             {
             // check to see if module can handle more than one region
@@ -1472,11 +1549,38 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
                   }
                 }
               }
-            else
+            }
+          else if (roi && roi->IsA("vtkMRMLAnnotationROINode"))
+            {
+            roi->WriteCLI(commandLineAsString, prefix+flag, coordinateSystemFlag, multipleFlag);
+            }
+          else if (points)
+            {
+            // find the children of this hierarchy node
+            vtkNew<vtkCollection> col;
+            points->GetChildrenDisplayableNodes(col.GetPointer());
+            vtkDebugMacro("Getting children displayable nodes from points " << points->GetID());
+            unsigned int numChildren = col->GetNumberOfItems();
+            vtkDebugMacro("Displayable hierarchy has " << numChildren << " child nodes");
+            for (unsigned int c = 0; c < numChildren; c++)
               {
-              // Can't support this command line with this region
-              // list
-              vtkErrorMacro("Module does not support multiple regions. Region list contains " << numberOfSelectedRegions << " selected regions.");
+              // the hierarchy nodes have a sorting index that's respected by
+              // GetNthChildNode
+              vtkMRMLHierarchyNode *nthHierarchyNode = points->GetNthChildNode(c);
+              // then get the displayable node from that hierarchy node
+              if (nthHierarchyNode)
+                {
+                vtkMRMLDisplayableHierarchyNode *nthDisplayableHierarchyNode = vtkMRMLDisplayableHierarchyNode::SafeDownCast(nthHierarchyNode);
+                vtkMRMLDisplayableNode *displayableNode = NULL;
+                if (nthDisplayableHierarchyNode)
+                  {
+                  displayableNode = nthDisplayableHierarchyNode->GetDisplayableNode();
+                  }
+                if (displayableNode)
+                  {
+                  displayableNode->WriteCLI(commandLineAsString, prefix+flag, coordinateSystemFlag, multipleFlag);
+                  }
+                }
               }
             }
           continue;
@@ -1484,7 +1588,7 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
         }
       }
     }
-
+  
   // now tack on any parameters that are based on indices
   //
   // build a list of indices to traverse in order
@@ -1672,6 +1776,8 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
     //
     itksysProcess *process = itksysProcess_New();
 
+    this->Internal->Processes.push_back(process);
+
     // setup the command
     itksysProcess_SetCommand(process, command);
     itksysProcess_SetOption(process,
@@ -1718,6 +1824,8 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
       if (node0->GetModuleDescription().GetProcessInformation()->Abort)
         {
         itksysProcess_Kill(process);
+        this->Internal->Processes.erase(
+              std::find(this->Internal->Processes.begin(), this->Internal->Processes.end(), process));
         node0->GetModuleDescription().GetProcessInformation()->Progress = 0;
         node0->GetModuleDescription().GetProcessInformation()->StageProgress =0;
         this->GetApplicationLogic()->RequestModified( node0 );
@@ -1798,7 +1906,9 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
           }
         }
       }
+    this->Internal->ProcessesKillLock->Lock();
     itksysProcess_WaitForExit(process, 0);
+    this->Internal->ProcessesKillLock->Unlock();
 
 
     // remove the embedded XML from the stdout stream
@@ -1959,7 +2069,11 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
         }
 
       // clean up
+      this->Internal->ProcessesKillLock->Lock();
+      this->Internal->Processes.erase(
+            std::find(this->Internal->Processes.begin(), this->Internal->Processes.end(), process));
       itksysProcess_Delete(process);
+      this->Internal->ProcessesKillLock->Unlock();
       }
     }
   else if ( commandType == SharedObjectModule )
@@ -2187,6 +2301,16 @@ void vtkSlicerCLIModuleLogic::ApplyTask(void *clientdata)
         // now, he/she will still be looking at the node by the time the
         // data is reloaded by the main thread.
         bool displayData = this->IsCommandLineModuleNodeUpdatingDisplay(node0);
+
+        // displayData causes resetting of slice views (the output volume is shown in the background,
+        // the foreground volume is cleared, the middle slice is selected, the FOV is reset, etc.)
+        // which is not desirable when AutoRun is enabled (because the user already set up the
+        // slice viewers for optimal viewing)
+        if (node0->GetAutoRun())
+        {
+          displayData=false;
+        }
+
         bool deleteFile = this->GetDeleteTemporaryFiles();
         int requestUID = this->GetApplicationLogic()
           ->RequestReadData((*id2fn0).first.c_str(), (*id2fn0).second.c_str(),

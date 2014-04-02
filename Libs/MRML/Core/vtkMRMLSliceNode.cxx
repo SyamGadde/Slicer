@@ -21,12 +21,15 @@ Version:   $Revision: 1.2 $
 // VTK includes
 #include <vtkMath.h>
 #include <vtkMatrix4x4.h>
+#include <vtkNew.h>
 #include <vtkObjectFactory.h>
-#include <vtkSmartPointer.h>
 #include <vtkVector.h>
 
 // VNL includes
 #include <vnl/vnl_double_3.h>
+
+// STL includes
+#include <algorithm>
 
 //------------------------------------------------------------------------------
 vtkCxxSetObjectMacro(vtkMRMLSliceNode, SliceToRAS, vtkMatrix4x4);
@@ -224,6 +227,106 @@ double* vtkMRMLSliceNode::grayColor()
                                 140. / 255.,
                                 140. / 255.};
   return grayColor;
+}
+
+//---------------------------------------------------------------------------
+int vtkMRMLSliceNode::GetNumberOfThreeDViewIDs() const
+{
+  return static_cast<int>(this->ThreeDViewIDs.size());
+}
+
+//----------------------------------------------------------------------------
+void vtkMRMLSliceNode::AddThreeDViewID(const char* viewNodeID)
+{
+  if (!viewNodeID)
+    {
+    return;
+    }
+
+  if (this->IsThreeDViewIDPresent(viewNodeID))
+    {
+    return; // already exists, do nothing
+    }
+
+  this->ThreeDViewIDs.push_back(std::string(viewNodeID));
+  if (this->Scene)
+    {
+    this->Scene->AddReferencedNodeID(viewNodeID, this);
+    }
+
+  this->Modified();
+}
+
+//----------------------------------------------------------------------------
+void vtkMRMLSliceNode::RemoveThreeDViewID(char* viewNodeID)
+{
+  if (viewNodeID == NULL)
+    {
+    return;
+    }
+  std::vector< std::string > viewNodeIDs;
+  for(unsigned int i=0; i<this->ThreeDViewIDs.size(); i++)
+    {
+    if (std::string(viewNodeID) != this->ThreeDViewIDs[i])
+      {
+      viewNodeIDs.push_back(this->ThreeDViewIDs[i]);
+      }
+    }
+  if (viewNodeIDs.size() != this->ThreeDViewIDs.size())
+    {
+    this->Scene->RemoveReferencedNodeID(viewNodeID, this);
+    this->ThreeDViewIDs = viewNodeIDs;
+    this->Modified();
+    }
+  else
+    {
+    vtkErrorMacro("vtkMRMLDisplayNode::RemoveThreeDViewID() id "
+      << viewNodeID << " not found");
+    }
+}
+
+//----------------------------------------------------------------------------
+void vtkMRMLSliceNode::RemoveAllThreeDViewIDs()
+{
+  for(unsigned int i=0; i<this->ThreeDViewIDs.size(); i++)
+    {
+    this->Scene->RemoveReferencedNodeID(ThreeDViewIDs[i].c_str(), this);
+    }
+  this->ThreeDViewIDs.clear();
+  this->Modified();
+}
+
+//----------------------------------------------------------------------------
+const char* vtkMRMLSliceNode::GetNthThreeDViewID(unsigned int index)
+{
+  if (index >= ThreeDViewIDs.size())
+    {
+    vtkErrorMacro("vtkMRMLDisplayNode::GetNthThreeDViewID() index "
+      << index << " outside the range 0-" << this->ThreeDViewIDs.size()-1 );
+    return NULL;
+    }
+  return ThreeDViewIDs[index].c_str();
+}
+
+//----------------------------------------------------------------------------
+bool vtkMRMLSliceNode::IsThreeDViewIDPresent(const char* viewNodeID)const
+{
+  if (viewNodeID == 0)
+    {
+    return false;
+    }
+  std::string value(viewNodeID);
+  std::vector< std::string >::const_iterator it =
+    std::find(this->ThreeDViewIDs.begin(), this->ThreeDViewIDs.end(), value);
+  return it != this->ThreeDViewIDs.end();
+}
+
+//----------------------------------------------------------------------------
+bool vtkMRMLSliceNode
+::IsDisplayableInThreeDView(const char* viewNodeID)const
+{
+  return this->GetNumberOfThreeDViewIDs() == 0
+    || this->IsThreeDViewIDPresent(viewNodeID);
 }
 
 //----------------------------------------------------------------------------
@@ -460,8 +563,8 @@ void vtkMRMLSliceNode::UpdateMatrices()
     }
   double spacing[3];
   unsigned int i;
-  vtkSmartPointer<vtkMatrix4x4> xyToSlice = vtkSmartPointer<vtkMatrix4x4>::New();
-  vtkSmartPointer<vtkMatrix4x4> xyToRAS = vtkSmartPointer<vtkMatrix4x4>::New();
+  vtkNew<vtkMatrix4x4> xyToSlice;
+  vtkNew<vtkMatrix4x4> xyToRAS;
 
   int disabledModify = this->StartModify();
 
@@ -497,15 +600,15 @@ void vtkMRMLSliceNode::UpdateMatrices()
     //
     // RAS = XYToRAS * XY
     //
-    vtkMatrix4x4::Multiply4x4(this->SliceToRAS, xyToSlice, xyToRAS);
+    vtkMatrix4x4::Multiply4x4(this->SliceToRAS, xyToSlice.GetPointer(), xyToRAS.GetPointer());
 
     bool modified = false;
 
     // check to see if the matrix actually changed
-    if ( !Matrix4x4AreEqual (xyToRAS, this->XYToRAS) )
+    if ( !Matrix4x4AreEqual (xyToRAS.GetPointer(), this->XYToRAS) )
       {
-      this->XYToSlice->DeepCopy( xyToSlice );
-      this->XYToRAS->DeepCopy( xyToRAS );
+      this->XYToSlice->DeepCopy(xyToSlice.GetPointer());
+      this->XYToRAS->DeepCopy(xyToRAS.GetPointer());
       modified = true;
       }
 
@@ -526,13 +629,13 @@ void vtkMRMLSliceNode::UpdateMatrices()
       this->UVWToSlice->SetElement(2, 3, 0.);
       }
 
-    vtkSmartPointer<vtkMatrix4x4> uvwToRAS = vtkSmartPointer<vtkMatrix4x4>::New();
+    vtkNew<vtkMatrix4x4> uvwToRAS;
 
-    vtkMatrix4x4::Multiply4x4(this->SliceToRAS, this->UVWToSlice, uvwToRAS);
+    vtkMatrix4x4::Multiply4x4(this->SliceToRAS, this->UVWToSlice, uvwToRAS.GetPointer());
 
-    if ( !Matrix4x4AreEqual (uvwToRAS, this->UVWToRAS) )
+    if (!Matrix4x4AreEqual(uvwToRAS.GetPointer(), this->UVWToRAS))
       {
-      this->UVWToRAS->DeepCopy( uvwToRAS );
+      this->UVWToRAS->DeepCopy(uvwToRAS.GetPointer());
       modified = true;
       }
 
@@ -676,6 +779,19 @@ void vtkMRMLSliceNode::WriteXML(ostream& of, int nIndent)
      << this->PrescribedSliceSpacing[1] << " "
      << this->PrescribedSliceSpacing[2] << "\"";
 
+  ss.clear();
+  for (unsigned int n = 0; n < this->ThreeDViewIDs.size(); ++n)
+    {
+    ss << this->ThreeDViewIDs[n];
+    if (n < this->ThreeDViewIDs.size()-1)
+      {
+      ss << " ";
+      }
+    }
+  if (this->ThreeDViewIDs.size() > 0)
+    {
+    of << indent << " threeDViewNodeRef=\"" << ss.str().c_str() << "\"";
+    }
 
 }
 
@@ -935,6 +1051,19 @@ void vtkMRMLSliceNode::ReadXMLAttributes(const char** atts)
 
       this->SetSliceSpacingMode( val );
       }
+
+    else if (!strcmp(attName, "threeDViewNodeRef"))
+      {
+      std::stringstream ss(attValue);
+      while (!ss.eof())
+        {
+        std::string id;
+        ss >> id;
+        this->AddThreeDViewID(id.c_str());
+        }
+      }
+
+
     }
   
   if (!layoutColorFound)
@@ -1137,6 +1266,11 @@ void vtkMRMLSliceNode::PrintSelf(ostream& os, vtkIndent indent)
                                << this->PrescribedSliceSpacing[2] << ")\n";
   os << indent << "Interacting: " <<
     (this->Interacting ? "on" : "off") << "\n";
+  for (unsigned int i=0; i<this->ThreeDViewIDs.size(); i++)
+    {
+    os << indent << "ThreeDViewIDs[" << i << "]: " <<
+      this->ThreeDViewIDs[i] << "\n";
+    }
 }
 
 void vtkMRMLSliceNode::JumpSlice(double r, double a, double s)
@@ -1666,7 +1800,7 @@ double vtkMRMLSliceNode::GetSliceOffset()
   // - pull out the Z translation part
   //
 
-  vtkSmartPointer<vtkMatrix4x4> sliceToRAS = vtkSmartPointer<vtkMatrix4x4>::New();
+  vtkNew<vtkMatrix4x4> sliceToRAS;
   sliceToRAS->DeepCopy( this->GetSliceToRAS() );
   for (int i = 0; i < 3; i++)
     {
@@ -1703,14 +1837,14 @@ void vtkMRMLSliceNode::SetSliceOffset(double offset)
     return;
     }
 
-  vtkSmartPointer<vtkMatrix4x4> sliceToRAS = vtkSmartPointer<vtkMatrix4x4>::New();
+  vtkNew<vtkMatrix4x4> sliceToRAS;
   sliceToRAS->DeepCopy( this->GetSliceToRAS() );
   for (int i = 0; i < 3; i++)
     {
     sliceToRAS->SetElement( i, 3, 0.0 );  // Zero out the tranlation portion
     }
-  vtkSmartPointer<vtkMatrix4x4> sliceToRASInverted = vtkSmartPointer<vtkMatrix4x4>::New(); // inverse sliceToRAS
-  sliceToRASInverted->DeepCopy( sliceToRAS );
+  vtkNew<vtkMatrix4x4> sliceToRASInverted; // inverse sliceToRAS
+  sliceToRASInverted->DeepCopy(sliceToRAS.GetPointer());
   sliceToRASInverted->Invert();
   double v1[4], v2[4], v3[4];
   for (int i = 0; i < 4; i++)
@@ -1737,7 +1871,7 @@ void vtkMRMLSliceNode::SetSliceOffset(double offset)
       {
       sliceToRAS->SetElement( i, 3, v3[i] );
       }
-    this->GetSliceToRAS()->DeepCopy( sliceToRAS );
+    this->GetSliceToRAS()->DeepCopy(sliceToRAS.GetPointer());
     this->UpdateMatrices();
     }
 }
@@ -1761,8 +1895,8 @@ void vtkMRMLSliceNode::RotateToVolumePlane(vtkMRMLVolumeNode *volumeNode)
     return;
     }
 
-  vtkSmartPointer<vtkMatrix4x4> ijkToRAS = vtkSmartPointer<vtkMatrix4x4>::New();
-  volumeNode->GetIJKToRASMatrix(ijkToRAS);
+  vtkNew<vtkMatrix4x4> ijkToRAS;
+  volumeNode->GetIJKToRASMatrix(ijkToRAS.GetPointer());
 
   // apply the transform 
   vtkMRMLTransformNode *transformNode  = volumeNode->GetParentTransformNode();
@@ -1770,9 +1904,9 @@ void vtkMRMLSliceNode::RotateToVolumePlane(vtkMRMLVolumeNode *volumeNode)
     {
     if ( transformNode->IsTransformToWorldLinear() )
       {
-      vtkSmartPointer<vtkMatrix4x4> rasToRAS = vtkSmartPointer<vtkMatrix4x4>::New();
-      transformNode->GetMatrixTransformToWorld( rasToRAS );
-      rasToRAS->Multiply4x4( rasToRAS, ijkToRAS, ijkToRAS );
+      vtkNew<vtkMatrix4x4> rasToRAS;
+      transformNode->GetMatrixTransformToWorld(rasToRAS.GetPointer());
+      rasToRAS->Multiply4x4( rasToRAS.GetPointer(), ijkToRAS.GetPointer(), ijkToRAS.GetPointer());
       } 
     else 
       {

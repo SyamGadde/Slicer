@@ -12,10 +12,6 @@
 #include "vtkSlicerConfigure.h" // For Slicer_BUILD_CLI_SUPPORT
 #include "vtkSlicerTask.h"
 
-// VTK includes
-#include <vtkPointData.h>
-#include <vtkPolyData.h>
-
 // MRML includes
 #include <vtkCacheManager.h>
 #include <vtkMRMLColorTableStorageNode.h>
@@ -32,11 +28,14 @@
 #include <vtkMRMLFreeSurferModelOverlayStorageNode.h>
 #include <vtkMRMLFreeSurferModelStorageNode.h>
 #include <vtkMRMLLabelMapVolumeDisplayNode.h>
+#include <vtkMRMLTransformNode.h>
 #include <vtkMRMLLinearTransformNode.h>
+#include <vtkMRMLBSplineTransformNode.h>
+#include <vtkMRMLGridTransformNode.h>
 #include <vtkMRMLModelNode.h>
 #include <vtkMRMLModelHierarchyNode.h>
 #include <vtkMRMLNRRDStorageNode.h>
-#include <vtkMRMLNonlinearTransformNode.h>
+#include <vtkMRMLScene.h>
 #include <vtkMRMLSelectionNode.h>
 #include <vtkMRMLSliceCompositeNode.h>
 #include <vtkMRMLSliceNode.h>
@@ -45,14 +44,24 @@
 #include <vtkMRMLVectorVolumeNode.h>
 #include <vtkMRMLVolumeArchetypeStorageNode.h>
 
+// VTK includes
+#include <vtkNew.h>
+#include <vtkObjectFactory.h>
+#include <vtkPointData.h>
+#include <vtkPolyData.h>
+
 // ITKSYS includes
 #include <itksys/SystemTools.hxx>
 
 // STD includes
 #include <algorithm>
-#ifdef linux
+
+#ifdef ITK_USE_PTHREADS
 # include <unistd.h>
+# include <sys/time.h>
+# include <sys/resource.h>
 #endif
+
 #include <queue>
 
 //----------------------------------------------------------------------------
@@ -395,7 +404,13 @@ vtkSlicerApplicationLogic
 
 #ifdef ITK_USE_PTHREADS
   // Adjust the priority of all PROCESS level threads.  Not a perfect solution.
-  int ret = nice(20);
+  int which = PRIO_PROCESS;
+  id_t pid;
+  int priority = 20;
+  int ret;
+
+  pid = getpid();
+  ret = setpriority(which, pid, priority);
   ret = ret; // dummy code to use the return value and avoid a compiler warning
 #endif
 
@@ -471,7 +486,13 @@ vtkSlicerApplicationLogic
 
 #ifdef ITK_USE_PTHREADS
   // Adjust the priority of all PROCESS level threads.  Not a perfect solution.
-  int ret = nice(20);
+  int which = PRIO_PROCESS;
+  id_t pid;
+  int priority = 20;
+  int ret;
+
+  pid = getpid();
+  ret = setpriority(which, pid, priority);
   ret = ret; // dummy code to use the return value and avoid a compiler warning
 #endif
 
@@ -827,8 +848,10 @@ void vtkSlicerApplicationLogic::ProcessReadNodeData(ReadDataRequest& req)
   vtkMRMLDiffusionTensorVolumeNode *dtvnd = 0;
   vtkMRMLDiffusionWeightedVolumeNode *dwvnd = 0;
   vtkMRMLModelNode *mnd = 0;
+  vtkMRMLTransformNode *tnd = 0;
   vtkMRMLLinearTransformNode *ltnd = 0;
-  vtkMRMLNonlinearTransformNode *nltnd = 0;
+  vtkMRMLBSplineTransformNode *btnd = 0;
+  vtkMRMLGridTransformNode *gtnd = 0;
   vtkMRMLDisplayableNode *fbnd = 0;
   vtkMRMLColorTableNode *cnd = 0;
   vtkMRMLDoubleArrayNode *dand = 0;
@@ -861,8 +884,10 @@ void vtkSlicerApplicationLogic::ProcessReadNodeData(ReadDataRequest& req)
 
 
   mnd   = vtkMRMLModelNode::SafeDownCast(nd);
+  tnd   = vtkMRMLTransformNode::SafeDownCast(nd);
   ltnd  = vtkMRMLLinearTransformNode::SafeDownCast(nd);
-  nltnd  = vtkMRMLNonlinearTransformNode::SafeDownCast(nd);
+  btnd  = vtkMRMLBSplineTransformNode::SafeDownCast(nd);
+  gtnd  = vtkMRMLGridTransformNode::SafeDownCast(nd);
   fbnd  = vtkMRMLDisplayableNode::SafeDownCast(nd);
   cnd = vtkMRMLColorTableNode::SafeDownCast(nd);
   dand = vtkMRMLDoubleArrayNode::SafeDownCast(nd);
@@ -1006,12 +1031,12 @@ void vtkSlicerApplicationLogic::ProcessReadNodeData(ReadDataRequest& req)
           fson->Delete();
           }
         }
-    else if (ltnd || nltnd)
+    else if (ltnd || btnd || gtnd || tnd)
       {
-      // Load a linear transform node
+      // Load a transform node
 
-      // transforms can be communicated either using storage nodes or
-      // in scenes.  we handle the former here.  the latter is handled
+      // Transforms can be communicated either using storage nodes or
+      // in scenes. We handle the former here. The latter is handled
       // by ProcessReadSceneData()
 
       storageNode = vtkMRMLTransformStorageNode::New();
@@ -1177,7 +1202,7 @@ void vtkSlicerApplicationLogic::ProcessReadNodeData(ReadDataRequest& req)
       disp->SetAndObserveColorNodeID("vtkMRMLFreeSurferProceduralColorNodeRedGreen");
       }
     }
-  else if (ltnd || nltnd)
+  else if (ltnd || btnd || gtnd || tnd)
     {
     // Linear transform node
     // (no display node)
@@ -1319,7 +1344,7 @@ void vtkSlicerApplicationLogic::ProcessReadSceneData(ReadDataRequest& req)
     return;
     }
 
-  vtkSmartPointer<vtkMRMLScene> miniscene = vtkSmartPointer<vtkMRMLScene>::New();
+  vtkNew<vtkMRMLScene> miniscene;
   miniscene->SetURL( req.GetFilename().c_str() );
   miniscene->Import();
 

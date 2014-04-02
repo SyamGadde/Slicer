@@ -37,6 +37,8 @@ vtkCxxSetReferenceStringMacro(vtkMRMLDisplayNode, ActiveScalarName);
 //----------------------------------------------------------------------------
 vtkMRMLDisplayNode::vtkMRMLDisplayNode()
 {
+  this->HideFromEditors = 1;
+
   this->Opacity = 1.0;
   this->Ambient = 0.0;
   this->Diffuse = 1.0;
@@ -142,7 +144,7 @@ void vtkMRMLDisplayNode::WriteXML(ostream& of, int nIndent)
 
   of << indent << " pointSize=\"" << this->PointSize << "\"";
   of << indent << " lineWidth=\"" << this->LineWidth << "\"";
-  of << indent << " representation=\"" << this->SurfaceRepresentation << "\"";
+  of << indent << " representation=\"" << this->Representation << "\"";
   of << indent << " lighting=\"" << (this->Lighting? "true" : "false") << "\"";
   of << indent << " interpolation=\"" << this->Interpolation << "\"";
   of << indent << " shading=\"" << (this->Shading? "true" : "false") << "\"";
@@ -845,6 +847,42 @@ bool vtkMRMLDisplayNode::IsDisplayableInView(const char* viewNodeID)const
 {
   return this->GetNumberOfViewNodeIDs() == 0
     || this->IsViewNodeIDPresent(viewNodeID);
+}
+
+//-------------------------------------------------------
+void vtkMRMLDisplayNode
+::SetViewNodeIDs(const std::vector<std::string>& viewNodeIDs)
+{
+  std::vector<std::string>::const_iterator sourceIt =
+    viewNodeIDs.begin();
+  std::vector<std::string>::iterator destIt =
+    this->ViewNodeIDs.begin();
+  bool different = false;
+  for (; sourceIt != viewNodeIDs.end(); ++sourceIt, ++destIt)
+    {
+    if (destIt == this->ViewNodeIDs.end())
+      {
+      different = true;
+      }
+    else if (*sourceIt != *destIt)
+      {
+      different = true;
+      destIt = this->ViewNodeIDs.erase(destIt);
+      }
+    if (different)
+      {
+      destIt = this->ViewNodeIDs.insert(destIt, *sourceIt);
+      }
+    }
+  if (destIt != this->ViewNodeIDs.end())
+    {
+    different = true;
+    this->ViewNodeIDs.erase(destIt, this->ViewNodeIDs.end());
+    }
+  if (different)
+    {
+    this->Modified();
+    }
 }
 
 //-------------------------------------------------------

@@ -65,11 +65,13 @@ class EffectOptions(EditOptions):
 
     # interface for the scope options
     self.scopeFrame = qt.QFrame(self.frame)
+    self.scopeFrame.objectName = 'ScopeFrame'
     self.scopeFrame.setLayout(qt.QHBoxLayout())
     self.frame.layout().addWidget(self.scopeFrame)
     self.scopeLabel = qt.QLabel('Scope:')
     self.scopeFrame.layout().addWidget(self.scopeLabel)
     self.scopeComboBox = qt.QComboBox(self.scopeFrame)
+    self.scopeComboBox.objectName = 'ScopeComboBox'
     for scopeOption in self.scopeOptions:
       self.scopeComboBox.addItem(scopeOption)
     self.scopeComboBox.toolTip = "Choose the scope for applying this tool.  Scope of 'visible' refers to contents of Red slice by default (or slice clicked in)"
@@ -299,8 +301,8 @@ class EffectLogic(object):
 
   def layerXYToIJK(self,layerLogic,xyPoint):
     """return i j k in image space of the layer for a given x y"""
-    xyToIJK = layerLogic.GetXYToIJKTransform().GetMatrix()
-    ijk = xyToIJK.MultiplyPoint(xyPoint + (0,1,))[:3]
+    xyToIJK = layerLogic.GetXYToIJKTransform()
+    ijk = xyToIJK.TransformDoublePoint(xyPoint + (0,))
     i = int(round(ijk[0]))
     j = int(round(ijk[1]))
     k = int(round(ijk[2]))
@@ -414,12 +416,12 @@ class EffectLogic(object):
     slice view for the given layerLogic
     - optionally set those as the corners of a vtkImageSlicePaint"""
 
-    xyToIJK = layerLogic.GetXYToIJKTransform().GetMatrix()
+    xyToIJK = layerLogic.GetXYToIJKTransform()
     w,h,d = layerLogic.GetImageData().GetDimensions()
     xyCorners = ( (0,0), (w,0), (0,h), (w,h) )
     ijkCorners = []
     for xy in xyCorners:
-      ijk = xyToIJK.MultiplyPoint(xy + (0,1))[:3]
+      ijk = xyToIJK.TransformDoublePoint(xy + (0,))
       ijkCorners.append(map(round, ijk))
       
     if slicePaint:

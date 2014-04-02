@@ -21,6 +21,17 @@
 #ifndef __qSlicerMouseModeToolBar_p_h
 #define __qSlicerMouseModeToolBar_p_h
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Slicer API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 // Qt includes
 #include <QToolBar>
 #include <QMenu>
@@ -63,9 +74,9 @@ public:
   void init();
   void setMRMLScene(vtkMRMLScene* newScene);
   void updateWidgetFromMRML();
-  /// given an annotation id, find the action associated with it and set it
+  /// given an place node class name, find the action associated with it and set it
   /// checked, update the cursor, update the icon on the button
-  void updateWidgetToAnnotation(const char *annotationID);
+  void updateWidgetToPlace(const char *placeNodeClassName);
 
 public slots:
 
@@ -75,8 +86,8 @@ public slots:
   void updateWidgetFromSelectionNode();
   void updateWidgetFromInteractionNode();
 
-  void onActiveAnnotationIDChangedEvent();
-  void onAnnotationIDListModifiedEvent();
+  void onActivePlaceNodeClassNameChangedEvent();
+  void onPlaceNodeClassNameListModifiedEvent();
 public:
 
   vtkSmartPointer<vtkMRMLScene>            MRMLScene;
@@ -92,7 +103,7 @@ public:
   /// Group the place actions together so that they're exclusive
   QActionGroup* ActionGroup;
 
-  QString DefaultAnnotation;
+  QString DefaultPlaceClassName;
 };
 
 #endif

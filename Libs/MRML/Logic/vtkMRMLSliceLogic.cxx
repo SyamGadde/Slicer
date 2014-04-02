@@ -39,6 +39,7 @@
 #include <vtkImageReslice.h>
 #include <vtkMath.h>
 #include <vtkNew.h>
+#include <vtkObjectFactory.h>
 #include <vtkPlaneSource.h>
 #include <vtkPolyDataCollection.h>
 #include <vtkSmartPointer.h>
@@ -198,6 +199,11 @@ void vtkMRMLSliceLogic::SetMRMLSceneInternal(vtkMRMLScene * newScene)
   this->SetAndObserveMRMLSceneEventsInternal(newScene, events.GetPointer());
 
   this->ProcessMRMLLogicsEvents();
+
+  this->BackgroundLayer->SetMRMLScene(newScene);
+  this->ForegroundLayer->SetMRMLScene(newScene);
+  this->LabelLayer->SetMRMLScene(newScene);
+
   this->ProcessMRMLSceneEvents(newScene, vtkMRMLScene::EndBatchProcessEvent, 0);
 }
 
@@ -295,18 +301,7 @@ void vtkMRMLSliceLogic::UpdateSliceCompositeNode()
     return;
     }
   // find SliceCompositeNode in the scene
-  vtkMRMLSliceCompositeNode *node= 0;
-  int nnodes = this->GetMRMLScene()->GetNumberOfNodesByClass("vtkMRMLSliceCompositeNode");
-  for (int n=0; n<nnodes; n++)
-    {
-    node = vtkMRMLSliceCompositeNode::SafeDownCast (
-          this->GetMRMLScene()->GetNthNodeByClass(n, "vtkMRMLSliceCompositeNode"));
-    if (node->GetLayoutName() && !strcmp(node->GetLayoutName(), this->GetName()))
-      {
-      break;
-      }
-    node = 0;
-    }
+  vtkMRMLSliceCompositeNode *node= vtkMRMLSliceLogic::GetSliceCompositeNode(this->GetMRMLScene(), this->GetName());
 
   if ( this->SliceCompositeNode != 0 && node != 0 &&
        (this->SliceCompositeNode->GetID() == 0 ||
@@ -471,6 +466,7 @@ void vtkMRMLSliceLogic::OnMRMLNodeModified(vtkMRMLNode* node)
     if ( sliceDisplayNode)
       {
       sliceDisplayNode->SetVisibility( this->SliceNode->GetSliceVisible() );
+      sliceDisplayNode->SetViewNodeIDs( this->SliceNode->GetThreeDViewIDs());
       }
     }
   else if (node == this->SliceCompositeNode)
@@ -497,23 +493,20 @@ void vtkMRMLSliceLogic::ProcessMRMLLogicsEvents()
   //
   if ( this->BackgroundLayer == 0 )
     {
-    vtkMRMLSliceLayerLogic *layer = vtkMRMLSliceLayerLogic::New();
-    this->SetBackgroundLayer (layer);
-    layer->Delete();
+    vtkNew<vtkMRMLSliceLayerLogic> layer;
+    this->SetBackgroundLayer(layer.GetPointer());
     }
   if ( this->ForegroundLayer == 0 )
     {
-    vtkMRMLSliceLayerLogic *layer = vtkMRMLSliceLayerLogic::New();
-    this->SetForegroundLayer (layer);
-    layer->Delete();
+    vtkNew<vtkMRMLSliceLayerLogic> layer;
+    this->SetForegroundLayer(layer.GetPointer());
     }
   if ( this->LabelLayer == 0 )
     {
-    vtkMRMLSliceLayerLogic *layer = vtkMRMLSliceLayerLogic::New();
+    vtkNew<vtkMRMLSliceLayerLogic> layer;
     // turn on using the label outline only in this layer
     layer->IsLabelLayerOn();
-    this->SetLabelLayer (layer);
-    layer->Delete();
+    this->SetLabelLayer(layer.GetPointer());
     }
   // Update slice plane geometry
   if (this->SliceNode != 0
@@ -737,6 +730,7 @@ void vtkMRMLSliceLogic::SetLabelOpacity(double labelOpacity)
     }
 }
 
+//----------------------------------------------------------------------------
 void vtkMRMLSliceLogic
 ::SetBackgroundWindowLevel(double newWindow, double newLevel)
 {
@@ -969,7 +963,7 @@ void vtkMRMLSliceLogic::UpdatePipeline()
 
     if (!alphaBlending)
       {
-      vtkImageMathematics *tempMath = vtkImageMathematics::New();
+      vtkNew<vtkImageMathematics> tempMath;
       if (sliceCompositing == vtkMRMLSliceCompositeNode::Add)
         {
         // add the foreground and background
@@ -985,18 +979,15 @@ void vtkMRMLSliceLogic::UpdatePipeline()
       tempMath->SetInput2( backgroundImage );
       tempMath->GetOutput()->SetScalarType(VTK_SHORT);
 
-      vtkImageCast *tempCast = vtkImageCast::New();
+      vtkNew<vtkImageCast> tempCast;
       tempCast->SetInput( tempMath->GetOutput() );
       tempCast->SetOutputScalarTypeToUnsignedChar();
 
       this->Blend->SetInput( layerIndex, tempCast->GetOutput() );
       this->Blend->SetOpacity( layerIndex++, 1.0 );
 
-      tempMath->Delete();  // Blend may still be holding a reference
-      tempCast->Delete();  // Blend may still be holding a reference
-
       // UVW pipeline
-      vtkImageMathematics *tempMathUVW = vtkImageMathematics::New();
+      vtkNew<vtkImageMathematics> tempMathUVW;
       if (sliceCompositing == vtkMRMLSliceCompositeNode::Add)
         {
         // add the foreground and background
@@ -1012,15 +1003,12 @@ void vtkMRMLSliceLogic::UpdatePipeline()
       tempMathUVW->SetInput2( backgroundImageUVW );
       tempMathUVW->GetOutput()->SetScalarType(VTK_SHORT);
 
-      vtkImageCast *tempCastUVW = vtkImageCast::New();
+      vtkNew<vtkImageCast> tempCastUVW;
       tempCastUVW->SetInput( tempMathUVW->GetOutput() );
       tempCastUVW->SetOutputScalarTypeToUnsignedChar();
 
       this->BlendUVW->SetInput( layerIndexUVW, tempCastUVW->GetOutput() );
       this->BlendUVW->SetOpacity( layerIndexUVW++, 1.0 );
-
-      tempMathUVW->Delete();  // Blend may still be holding a reference
-      tempCastUVW->Delete();  // Blend may still be holding a reference
       }
     else
       {
@@ -1109,10 +1097,9 @@ void vtkMRMLSliceLogic::UpdatePipeline()
     vtkMRMLDisplayNode* displayNode = this->SliceModelNode ? this->SliceModelNode->GetModelDisplayNode() : 0;
     if ( displayNode && this->SliceNode )
       {
-      if (displayNode->GetVisibility() != this->SliceNode->GetSliceVisible() )
-        {
-        displayNode->SetVisibility( this->SliceNode->GetSliceVisible() );
-        }
+      displayNode->SetVisibility( this->SliceNode->GetSliceVisible() );
+      displayNode->SetViewNodeIDs( this->SliceNode->GetThreeDViewIDs());
+
       if ( (this->SliceNode->GetSliceResolutionMode() != vtkMRMLSliceNode::SliceResolutionMatch2DView &&
           !((backgroundImageUVW != 0) || (foregroundImageUVW != 0) || (labelImageUVW != 0) ) ) ||
           (this->SliceNode->GetSliceResolutionMode() == vtkMRMLSliceNode::SliceResolutionMatch2DView &&
@@ -1304,11 +1291,9 @@ void vtkMRMLSliceLogic::CreateSliceModel()
     this->SliceModelNode->SetSaveWithScene(0);
 
     // create plane slice
-    vtkPlaneSource *planeSource;
-    planeSource = vtkPlaneSource::New();
+    vtkNew<vtkPlaneSource> planeSource;
     planeSource->GetOutput()->Update();
     this->SliceModelNode->SetAndObservePolyData(planeSource->GetOutput());
-    planeSource->Delete();
     this->SliceModelNode->SetDisableModifiedEvent(0);
 
     // create display node and set texture
@@ -1349,7 +1334,9 @@ void vtkMRMLSliceLogic::CreateSliceModel()
     this->SliceModelTransformNode->SetSelectable(0);
     this->SliceModelTransformNode->SetSaveWithScene(0);
     // set the transform for the slice model for use by an image actor in the viewer
-    this->SliceModelTransformNode->GetMatrixTransformToParent()->Identity();
+    vtkNew<vtkMatrix4x4> identity;
+    identity->Identity();
+    this->SliceModelTransformNode->SetMatrixTransformToParent(identity.GetPointer());
 
     this->SliceModelTransformNode->SetDisableModifiedEvent(0);
 
@@ -2027,22 +2014,20 @@ void vtkMRMLSliceLogic::EndSliceCompositeNodeInteraction()
 //----------------------------------------------------------------------------
 void vtkMRMLSliceLogic::StartSliceNodeInteraction(unsigned int parameters)
 {
-  vtkMRMLSliceNode* sliceNode = this->GetSliceNode();
-  vtkMRMLSliceCompositeNode *compositeNode = this->GetSliceCompositeNode();
+  if (this->SliceNode == NULL || this->SliceCompositeNode == NULL)
+    {
+    return;
+    }
 
   // Cache the flags on what parameters are going to be modified. Need
   // to this this outside the conditional on HotLinkedControl and LinkedControl
-  sliceNode->SetInteractionFlags(parameters);
+  this->SliceNode->SetInteractionFlags(parameters);
 
   // If we have hot linked controls, then we want to broadcast changes
-  if (compositeNode && 
-      (compositeNode->GetHotLinkedControl() || parameters == vtkMRMLSliceNode::MultiplanarReformatFlag)
-      && compositeNode->GetLinkedControl())
+  if ((this->SliceCompositeNode->GetHotLinkedControl() || parameters == vtkMRMLSliceNode::MultiplanarReformatFlag)
+      && this->SliceCompositeNode->GetLinkedControl())
     {
-    if (sliceNode)
-      {
-      sliceNode->InteractingOn();
-      }
+    this->SliceNode->InteractingOn();
     }
 }
 
@@ -2147,21 +2132,20 @@ void vtkMRMLSliceLogic::SetSliceExtentsToSliceNode()
 //----------------------------------------------------------------------------
 void vtkMRMLSliceLogic::EndSliceNodeInteraction()
 {
-  vtkMRMLSliceNode *sliceNode = this->GetSliceNode();
-  vtkMRMLSliceCompositeNode *compositeNode = this->GetSliceCompositeNode();
+  if (this->SliceNode == NULL || this->SliceCompositeNode == NULL)
+    {
+    return;
+    }
 
   // If we have linked controls, then we want to broadcast changes
-  if (compositeNode && compositeNode->GetLinkedControl())
+  if (this->SliceCompositeNode->GetLinkedControl())
     {
-    if (sliceNode)
-      {
-      // Need to trigger a final message to broadcast to all the nodes
-      // that are linked
-      sliceNode->InteractingOn();
-      sliceNode->Modified();
-      sliceNode->InteractingOff();
-      sliceNode->SetInteractionFlags(0);
-      }
+    // Need to trigger a final message to broadcast to all the nodes
+    // that are linked
+    this->SliceNode->InteractingOn();
+    this->SliceNode->Modified();
+    this->SliceNode->InteractingOff();
+    this->SliceNode->SetInteractionFlags(0);
     }
 }
 
@@ -2360,30 +2344,37 @@ int vtkMRMLSliceLogic::GetSliceIndexFromOffset(double sliceOffset)
 }
 
 //----------------------------------------------------------------------------
-vtkMRMLSliceCompositeNode* vtkMRMLSliceLogic::GetSliceCompositeNode(vtkMRMLSliceNode* sliceNode)
+vtkMRMLSliceCompositeNode* vtkMRMLSliceLogic
+::GetSliceCompositeNode(vtkMRMLSliceNode* sliceNode)
 {
-  vtkMRMLSliceCompositeNode* sliceCompositeNode = 0;
-  vtkMRMLScene* scene = sliceNode ? sliceNode->GetScene() : 0;
-  if (!scene || !sliceNode->GetLayoutName())
+  return sliceNode ? vtkMRMLSliceLogic::GetSliceCompositeNode(
+    sliceNode->GetScene(), sliceNode->GetLayoutName()) : 0;
+}
+
+//----------------------------------------------------------------------------
+vtkMRMLSliceCompositeNode* vtkMRMLSliceLogic
+::GetSliceCompositeNode(vtkMRMLScene* scene, const char* layoutName)
+{
+  if (!scene || !layoutName)
     {
-    return sliceCompositeNode;
+    return 0;
     }
   vtkMRMLNode* node;
   vtkCollectionSimpleIterator it;
   for (scene->GetNodes()->InitTraversal(it);
        (node = (vtkMRMLNode*)scene->GetNodes()->GetNextItemAsObject(it)) ;)
     {
-    sliceCompositeNode = vtkMRMLSliceCompositeNode::SafeDownCast(node);
+    vtkMRMLSliceCompositeNode* sliceCompositeNode =
+      vtkMRMLSliceCompositeNode::SafeDownCast(node);
     if (sliceCompositeNode &&
         sliceCompositeNode->GetLayoutName() &&
-        !strcmp(sliceCompositeNode->GetLayoutName(), sliceNode->GetLayoutName()))
+        !strcmp(sliceCompositeNode->GetLayoutName(), layoutName))
       {
       return sliceCompositeNode;
       }
     }
   return 0;
 }
-
 
 //----------------------------------------------------------------------------
 bool vtkMRMLSliceLogic::IsSliceModelNode(vtkMRMLNode *mrmlNode)

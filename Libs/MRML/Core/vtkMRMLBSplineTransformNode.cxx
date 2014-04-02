@@ -12,14 +12,12 @@ Version:   $Revision: 1.14 $
 
 =========================================================================auto=*/
 
-
+#include "vtkGeneralTransform.h"
+#include "vtkITKBSplineTransform.h"
+#include "vtkMRMLBSplineTransformNode.h"
 #include "vtkObjectFactory.h"
 #include "vtkSmartPointer.h"
-
-#include "vtkITKBSplineTransform.h"
-
-#include "vtkMRMLBSplineTransformNode.h"
-
+#include "vtkNew.h"
 
 //------------------------------------------------------------------------------
 vtkMRMLNodeNewMacro(vtkMRMLBSplineTransformNode);
@@ -27,9 +25,10 @@ vtkMRMLNodeNewMacro(vtkMRMLBSplineTransformNode);
 //----------------------------------------------------------------------------
 vtkMRMLBSplineTransformNode::vtkMRMLBSplineTransformNode()
 {
-  vtkITKBSplineTransform *spline = vtkITKBSplineTransform::New();
-  this->SetAndObserveWarpTransformToParent(spline);
-  spline->Delete();
+  this->ReadWriteAsTransformToParent = 0;
+  vtkNew<vtkITKBSplineTransform> warp;
+  warp->SetSplineOrder(3);
+  this->SetAndObserveTransformFromParent(warp.GetPointer());
 }
 
 //----------------------------------------------------------------------------
@@ -42,15 +41,19 @@ void vtkMRMLBSplineTransformNode::WriteXML(ostream& of, int nIndent)
 {
   Superclass::WriteXML(of, nIndent);
 
-  if (this->WarpTransformToParent != NULL)
+  vtkITKBSplineTransform* spline=NULL;
+
+  if (this->ReadWriteAsTransformToParent)
     {
-    // this transform should be a b-spline
-    vtkITKBSplineTransform *spline = dynamic_cast<vtkITKBSplineTransform*>(this->WarpTransformToParent);
-    if( spline == NULL )
-      {
-      vtkErrorMacro("Transform is not a BSpline");
-      return;
-      }
+    spline=vtkITKBSplineTransform::SafeDownCast(GetTransformToParentAs("vtkITKBSplineTransform"));
+    }
+  else
+    {
+    spline=vtkITKBSplineTransform::SafeDownCast(GetTransformFromParentAs("vtkITKBSplineTransform"));
+    }
+
+  if (spline != NULL)
+    {
     of << " order=\"" << spline->GetSplineOrder() << "\" ";
     of << " fixedParam=\"";
     unsigned Nfp = spline->GetNumberOfFixedParameters();
@@ -84,6 +87,11 @@ void vtkMRMLBSplineTransformNode::WriteXML(ostream& of, int nIndent)
       }
     of << "\"";
     }
+  else
+    {
+    vtkErrorMacro("vtkMRMLBSplineTransformNode::WriteXML failed: the transform is not a vtkITKBSplineTransform");
+    }
+
 }
 
 //----------------------------------------------------------------------------
@@ -223,7 +231,21 @@ void vtkMRMLBSplineTransformNode::ReadXMLAttributes(const char** atts)
 
   if( spline.GetPointer() != 0 )
     {
-    this->SetAndObserveWarpTransformToParent( spline );
+    if (this->ReadWriteAsTransformToParent)
+      {
+      this->SetAndObserveTransformToParent( spline );
+      }
+    else
+      {
+      this->SetAndObserveTransformFromParent( spline );
+      }
+    }
+  else
+    {
+    if (this->GetStorageNodeID()==NULL)
+      {
+      vtkErrorMacro("vtkMRMLBSplineTransformNode::ReadXML failed: could not create a vtkITKBSplineTransform from the scene and no external transform storage file is specified");
+      }
     }
 }
 
@@ -233,14 +255,6 @@ void vtkMRMLBSplineTransformNode::ReadXMLAttributes(const char** atts)
 void vtkMRMLBSplineTransformNode::Copy(vtkMRMLNode *anode)
 {
   Superclass::Copy(anode);
-
-  // BUG: this explicit setting is required because the vtkITKBSplineTransform
-  // seems not to implement DeepCopy correctly (spline's Helper is NULL)
-  vtkMRMLBSplineTransformNode *otherBSpline = vtkMRMLBSplineTransformNode::SafeDownCast(anode);
-  if (otherBSpline)
-    {
-    this->SetAndObserveWarpTransformToParent(otherBSpline->GetWarpTransformToParent());
-    }
 }
 
 //----------------------------------------------------------------------------
@@ -248,7 +262,5 @@ void vtkMRMLBSplineTransformNode::PrintSelf(ostream& os, vtkIndent indent)
 {
   Superclass::PrintSelf(os,indent);
 }
-
-
 
 // End

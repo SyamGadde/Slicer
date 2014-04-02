@@ -239,7 +239,7 @@ void ApplyImageSeriesReaderWorkaround(vtkMRMLVolumeArchetypeStorageNode * storag
   // check for Analyze and similar format- if the archetype is 
   // one of those, then don't send the rest of the list
   //
-  std::string fileExt(itksys::SystemTools::GetFilenameLastExtension(fullName));
+  std::string fileExt=vtkMRMLStorageNode::GetLowercaseExtensionFromFileName(fullName);
   if ( fileExt != std::string(".hdr") 
       && fileExt != std::string(".img") 
       && fileExt != std::string(".mhd") 
@@ -371,6 +371,7 @@ int vtkMRMLVolumeArchetypeStorageNode::ReadDataInternal(vtkMRMLNode *refNode)
   if (reader->GetOutput() == NULL || reader->GetOutput()->GetPointData() == NULL)
     {
     vtkErrorMacro("ReadData: Unable to read data from file: " << fullName);
+    return 0;
     }
 
   vtkPointData * pointData = reader->GetOutput()->GetPointData();
@@ -396,6 +397,7 @@ int vtkMRMLVolumeArchetypeStorageNode::ReadDataInternal(vtkMRMLNode *refNode)
       && reader->GetNumberOfComponents() != 1)
     {
     vtkErrorMacro("ReadData: Not a scalar volume file: " << fullName );
+    return 0;
     }
 
   // Set volume attributes
@@ -406,16 +408,25 @@ int vtkMRMLVolumeArchetypeStorageNode::ReadDataInternal(vtkMRMLNode *refNode)
     {
     vtkDebugMacro("Number of file names = " << reader->GetNumberOfFileNames()
                   << ", number of slice location = " << reader->GetNumberOfSliceLocation());
-    // include the archtype, file 0, in the storage node's file list
-    for (unsigned int n = 0; n < reader->GetNumberOfFileNames(); n++)
+    if (this->FileNameList.size() == 0)
       {
-      const char *thisFileName = reader->GetFileName(n);
+      // It is safe to assume that the file names in reader are unique.
+      // Here we shortcut the n*log(n) unique insertion of  AddFileName().
+      this->FileNameList = reader->GetFileNames();
+      }
+    else
+      {
+      // include the archtype, file 0, in the storage node's file list
+      for (unsigned int n = 0; n < reader->GetNumberOfFileNames(); n++)
+        {
+        const char *thisFileName = reader->GetFileName(n);
 #ifndef NDEBUG
-      int currentSize =
+        int currentSize =
 #endif
-        this->AddFileName(thisFileName);
-      vtkDebugMacro("After adding file " << n << ", filename = " << thisFileName
-                    << " to this storage node's list, current size of the list = " << currentSize);
+          this->AddFileName(thisFileName);
+        vtkDebugMacro("After adding file " << n << ", filename = " << thisFileName
+                      << " to this storage node's list, current size of the list = " << currentSize);
+        }
       }
     }
 
@@ -546,7 +557,7 @@ int vtkMRMLVolumeArchetypeStorageNode::WriteDataInternal(vtkMRMLNode *refNode)
     {
     vtkDebugMacro("WriteData: writing out file with archetype " << fullName);
     
-    vtkSmartPointer<vtkITKImageWriter> writer = vtkSmartPointer<vtkITKImageWriter>::New();
+    vtkNew<vtkITKImageWriter> writer;
     writer->SetFileName(fullName.c_str());
   
     writer->SetInput( volNode->GetImageData() );
@@ -559,9 +570,9 @@ int vtkMRMLVolumeArchetypeStorageNode::WriteDataInternal(vtkMRMLNode *refNode)
       }
     
     // set volume attributes
-    vtkSmartPointer<vtkMatrix4x4> mat = vtkSmartPointer<vtkMatrix4x4>::New();
-    volNode->GetRASToIJKMatrix(mat);
-    writer->SetRasToIJKMatrix(mat);
+    vtkNew<vtkMatrix4x4> mat;
+    volNode->GetRASToIJKMatrix(mat.GetPointer());
+    writer->SetRasToIJKMatrix(mat.GetPointer());
     
     try
       {
@@ -680,7 +691,7 @@ std::string vtkMRMLVolumeArchetypeStorageNode::UpdateFileList(vtkMRMLNode *refNo
   vtkDebugMacro("UpdateFileList: new archetype file name = " << tempName.c_str());
 
   // set up the writer and write
-  vtkSmartPointer<vtkITKImageWriter> writer = vtkSmartPointer<vtkITKImageWriter>::New();
+  vtkNew<vtkITKImageWriter> writer;
   writer->SetFileName(tempName.c_str());
   
   writer->SetInput( volNode->GetImageData() );
@@ -697,9 +708,9 @@ std::string vtkMRMLVolumeArchetypeStorageNode::UpdateFileList(vtkMRMLNode *refNo
     }
 
   // set volume attributes
-  vtkSmartPointer<vtkMatrix4x4> mat = vtkSmartPointer<vtkMatrix4x4>::New();
-  volNode->GetRASToIJKMatrix(mat);
-  writer->SetRasToIJKMatrix(mat);
+  vtkNew<vtkMatrix4x4> mat;
+  volNode->GetRASToIJKMatrix(mat.GetPointer());
+  writer->SetRasToIJKMatrix(mat.GetPointer());
 
   try
     {

@@ -24,10 +24,12 @@
 // MRML includes
 #include "vtkMRMLApplicationLogic.h"
 #include <vtkMRMLColors.h>
+#include <vtkMRMLScene.h>
 #include <vtkMRMLSliceCompositeNode.h>
 #include <vtkMRMLSliceNode.h>
 #include <vtkMRMLSliceLogic.h>
 #include <vtkMRMLVolumeNode.h>
+#include <vtkMRMLViewNode.h>
 
 // VTK includes
 #include <vtkActor.h>
@@ -39,6 +41,7 @@
 #include <vtkMath.h>
 #include <vtkMatrix4x4.h>
 #include <vtkNew.h>
+#include <vtkObjectFactory.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkProperty.h>
 #include <vtkRenderer.h>
@@ -330,8 +333,12 @@ void vtkMRMLThreeDReformatDisplayableManager::vtkInternal
                  sliceToRAS->GetElement(2,3));
 
   // Update the widget itself if necessary
-  if ((!planeWidget->GetEnabled() && sliceNode->GetWidgetVisible()) ||
-     (planeWidget->GetEnabled() && !sliceNode->GetWidgetVisible()) ||
+  bool visible =
+    sliceNode->IsDisplayableInThreeDView(this->External->GetMRMLViewNode()->GetID())
+    && sliceNode->GetWidgetVisible();
+
+  if ((!planeWidget->GetEnabled() && visible) ||
+     (planeWidget->GetEnabled() && !visible) ||
      (!rep->GetLockNormalToCamera() && sliceNode->GetWidgetNormalLockedToCamera()) ||
      (rep->GetLockNormalToCamera() && !sliceNode->GetWidgetNormalLockedToCamera()))
     {

@@ -37,6 +37,7 @@
 #include "vtkMRMLLinearTransformNode.h"
 
 // VTK includes
+#include <vtkNew.h>
 #include <vtkSmartPointer.h>
 #include <vtkTransform.h>
 
@@ -48,6 +49,7 @@ protected:
   qSlicerTransformsModuleWidget* const q_ptr;
 public:
   qSlicerTransformsModuleWidgetPrivate(qSlicerTransformsModuleWidget& object);
+  static QList<vtkSmartPointer<vtkMRMLTransformableNode> > getSelectedNodes(qMRMLTreeView* tree);
   vtkSlicerTransformLogic*      logic()const;
   QButtonGroup*                 CoordinateReferenceButtonGroup;
   vtkMRMLLinearTransformNode*   MRMLTransformNode;
@@ -65,6 +67,26 @@ vtkSlicerTransformLogic* qSlicerTransformsModuleWidgetPrivate::logic()const
 {
   Q_Q(const qSlicerTransformsModuleWidget);
   return vtkSlicerTransformLogic::SafeDownCast(q->logic());
+}
+
+//-----------------------------------------------------------------------------
+QList<vtkSmartPointer<vtkMRMLTransformableNode> > qSlicerTransformsModuleWidgetPrivate::getSelectedNodes(qMRMLTreeView* tree)
+{
+  QModelIndexList selectedIndexes =
+    tree->selectionModel()->selectedRows();
+  selectedIndexes = qMRMLTreeView::removeChildren(selectedIndexes);
+
+  // Return the list of nodes
+  QList<vtkSmartPointer<vtkMRMLTransformableNode> > selectedNodes;
+  foreach(QModelIndex selectedIndex, selectedIndexes)
+    {
+    vtkMRMLTransformableNode* node = vtkMRMLTransformableNode::SafeDownCast(
+      tree->sortFilterProxyModel()->
+      mrmlNodeFromIndex( selectedIndex ));
+    Q_ASSERT(node);
+    selectedNodes << node;
+    }
+  return selectedNodes;
 }
 
 //-----------------------------------------------------------------------------
@@ -146,7 +168,7 @@ void qSlicerTransformsModuleWidget::setup()
 void qSlicerTransformsModuleWidget::onCoordinateReferenceButtonPressed(int id)
 {
   Q_D(qSlicerTransformsModuleWidget);
-  
+
   qMRMLTransformSliders::CoordinateReferenceType ref =
     (id == qMRMLTransformSliders::GLOBAL) ? qMRMLTransformSliders::GLOBAL : qMRMLTransformSliders::LOCAL;
   d->TranslationSliders->setCoordinateReference(ref);
@@ -157,7 +179,7 @@ void qSlicerTransformsModuleWidget::onCoordinateReferenceButtonPressed(int id)
 void qSlicerTransformsModuleWidget::onNodeSelected(vtkMRMLNode* node)
 {
   Q_D(qSlicerTransformsModuleWidget);
-  
+
   vtkMRMLLinearTransformNode* transformNode = vtkMRMLLinearTransformNode::SafeDownCast(node);
 
   // Enable/Disable CoordinateReference, identity buttons, MatrixViewGroupBox,
@@ -200,19 +222,23 @@ void qSlicerTransformsModuleWidget::identity()
     return;
     }
 
+  d->TranslationSliders->resetUnactiveSliders();
   d->RotationSliders->resetUnactiveSliders();
-  d->MRMLTransformNode->GetMatrixTransformToParent()->Identity();
+
+  vtkNew<vtkMatrix4x4> matrix; // initialized to identity by default
+  d->MRMLTransformNode->SetMatrixTransformToParent(matrix.GetPointer());
 }
 
 //-----------------------------------------------------------------------------
 void qSlicerTransformsModuleWidget::invert()
 {
   Q_D(qSlicerTransformsModuleWidget);
-  
+
   if (!d->MRMLTransformNode) { return; }
 
   d->RotationSliders->resetUnactiveSliders();
-  d->MRMLTransformNode->GetMatrixTransformToParent()->Invert();
+
+  d->MRMLTransformNode->Inverse();
 }
 
 //-----------------------------------------------------------------------------
@@ -246,20 +272,8 @@ void qSlicerTransformsModuleWidget::setMRMLScene(vtkMRMLScene* scene)
 void qSlicerTransformsModuleWidget::transformSelectedNodes()
 {
   Q_D(qSlicerTransformsModuleWidget);
-  QModelIndexList selectedIndexes =
-    d->TransformableTreeView->selectionModel()->selectedRows();
-  selectedIndexes = qMRMLTreeView::removeChildren(selectedIndexes);
-  // Applying the transform can't be done in the model index loop because
-  // setting the transform invalidates the model indexes.
-  QList<vtkSmartPointer<vtkMRMLTransformableNode> > nodesToTransform;
-  foreach(QModelIndex selectedIndex, selectedIndexes)
-    {
-    vtkMRMLTransformableNode* node = vtkMRMLTransformableNode::SafeDownCast(
-    d->TransformableTreeView->sortFilterProxyModel()->
-      mrmlNodeFromIndex( selectedIndex ));
-    Q_ASSERT(node);
-    nodesToTransform << node;
-    }
+  QList<vtkSmartPointer<vtkMRMLTransformableNode> > nodesToTransform =
+    qSlicerTransformsModuleWidgetPrivate::getSelectedNodes(d->TransformableTreeView);
   foreach(vtkSmartPointer<vtkMRMLTransformableNode> node, nodesToTransform)
     {
     node->SetAndObserveTransformNodeID(d->MRMLTransformNode->GetID());
@@ -270,15 +284,10 @@ void qSlicerTransformsModuleWidget::transformSelectedNodes()
 void qSlicerTransformsModuleWidget::untransformSelectedNodes()
 {
   Q_D(qSlicerTransformsModuleWidget);
-  QModelIndexList selectedIndexes =
-    d->TransformedTreeView->selectionModel()->selectedRows();
-  selectedIndexes = qMRMLTreeView::removeChildren(selectedIndexes);
-  foreach(QModelIndex selectedIndex, selectedIndexes)
+  QList<vtkSmartPointer<vtkMRMLTransformableNode> > nodesToTransform =
+    qSlicerTransformsModuleWidgetPrivate::getSelectedNodes(d->TransformedTreeView);
+  foreach(vtkSmartPointer<vtkMRMLTransformableNode> node, nodesToTransform)
     {
-    vtkMRMLTransformableNode* node = vtkMRMLTransformableNode::SafeDownCast(
-    d->TransformedTreeView->sortFilterProxyModel()->
-      mrmlNodeFromIndex( selectedIndex ));
-    Q_ASSERT(node);
     node->SetAndObserveTransformNodeID(0);
     }
 }
@@ -287,15 +296,10 @@ void qSlicerTransformsModuleWidget::untransformSelectedNodes()
 void qSlicerTransformsModuleWidget::hardenSelectedNodes()
 {
   Q_D(qSlicerTransformsModuleWidget);
-  QModelIndexList selectedIndexes =
-    d->TransformedTreeView->selectionModel()->selectedRows();
-  selectedIndexes = qMRMLTreeView::removeChildren(selectedIndexes);
-  foreach(QModelIndex selectedIndex, selectedIndexes)
+  QList<vtkSmartPointer<vtkMRMLTransformableNode> > nodesToTransform =
+    qSlicerTransformsModuleWidgetPrivate::getSelectedNodes(d->TransformedTreeView);
+  foreach(vtkSmartPointer<vtkMRMLTransformableNode> node, nodesToTransform)
     {
-    vtkMRMLTransformableNode* node = vtkMRMLTransformableNode::SafeDownCast(
-    d->TransformedTreeView->sortFilterProxyModel()->
-      mrmlNodeFromIndex( selectedIndex ));
-    Q_ASSERT(node);
     d->logic()->hardenTransform(vtkMRMLTransformableNode::SafeDownCast(node));
     }
 }

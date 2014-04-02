@@ -14,14 +14,16 @@
 #include "vtkMRMLBSplineTransformNode.h"
 #include "vtkMRMLGridTransformNode.h"
 #include "vtkMRMLLinearTransformNode.h"
+#include "vtkMRMLScene.h"
 #include "vtkMRMLTransformStorageNode.h"
 
-// VTKsys includes
+// ITKsys includes
 #include <itksys/SystemTools.hxx>
 
 // VTK includes
 #include <vtkGeneralTransform.h>
-#include <vtkSmartPointer.h>
+#include <vtkNew.h>
+#include <vtkObjectFactory.h>
 
 // ITK includes
 #include "itkBSplineDeformableTransform.h"
@@ -63,15 +65,15 @@ bool vtkSlicerTransformLogic::hardenTransform(vtkMRMLTransformableNode* transfor
     }
   if (transformNode->IsTransformToWorldLinear())
     {
-    vtkSmartPointer<vtkMatrix4x4> hardeningMatrix = vtkSmartPointer<vtkMatrix4x4>::New();
-    transformNode->GetMatrixTransformToWorld(hardeningMatrix);
-    transformableNode->ApplyTransformMatrix(hardeningMatrix);
+    vtkNew<vtkMatrix4x4> hardeningMatrix;
+    transformNode->GetMatrixTransformToWorld(hardeningMatrix.GetPointer());
+    transformableNode->ApplyTransformMatrix(hardeningMatrix.GetPointer());
     }
   else
     {
-    vtkSmartPointer<vtkGeneralTransform> hardeningTransform = vtkSmartPointer<vtkGeneralTransform>::New();
-    transformNode->GetTransformToWorld(hardeningTransform);
-    transformableNode->ApplyTransform(hardeningTransform);
+    vtkNew<vtkGeneralTransform> hardeningTransform;
+    transformNode->GetTransformToWorld(hardeningTransform.GetPointer());
+    transformableNode->ApplyTransform(hardeningTransform.GetPointer());
     }
 
   transformableNode->SetAndObserveTransformNodeID(NULL);
@@ -81,7 +83,7 @@ bool vtkSlicerTransformLogic::hardenTransform(vtkMRMLTransformableNode* transfor
 //----------------------------------------------------------------------------
 vtkMRMLTransformNode* vtkSlicerTransformLogic::AddTransform (const char* filename, vtkMRMLScene *scene)
 {
-  vtkMRMLTransformStorageNode *storageNode = vtkMRMLTransformStorageNode::New();
+  vtkNew<vtkMRMLTransformStorageNode> storageNode;
 
   if(scene == NULL){
     vtkErrorMacro("scene == NULL in vtkSlicerTransformLogic::AddTransform");
@@ -116,7 +118,7 @@ vtkMRMLTransformNode* vtkSlicerTransformLogic::AddTransform (const char* filenam
   name = itksys::SystemTools::GetFilenameName(fname);
 
   // check to see which node can read this type of file
-  vtkMRMLTransformNode *tnode = NULL;
+  vtkSmartPointer<vtkMRMLTransformNode> tnode;
 
   if (storageNode->SupportedFileType(name.c_str()))
     {
@@ -124,25 +126,25 @@ vtkMRMLTransformNode* vtkSlicerTransformLogic::AddTransform (const char* filenam
     storageNode->SetScene(scene);
 
     // now set up the reading
-    vtkMRMLGridTransformNode    *gridTfm = vtkMRMLGridTransformNode::New();
-    vtkMRMLBSplineTransformNode *bsplineTfm = vtkMRMLBSplineTransformNode::New();
-    vtkMRMLLinearTransformNode  *linearTfm = vtkMRMLLinearTransformNode::New();
+    vtkNew<vtkMRMLGridTransformNode>    gridTfm;
+    vtkNew<vtkMRMLBSplineTransformNode> bsplineTfm;
+    vtkNew<vtkMRMLLinearTransformNode>  linearTfm;
 
     gridTfm->SetScene(scene);
     bsplineTfm->SetScene(scene);
     linearTfm->SetScene(scene);
 
-    if (storageNode->ReadData(gridTfm))
+    if (storageNode->ReadData(gridTfm.GetPointer()))
       {
-      tnode = gridTfm;
+      tnode = gridTfm.GetPointer();
       }
-    else if (storageNode->ReadData(bsplineTfm))
+    else if (storageNode->ReadData(bsplineTfm.GetPointer()))
       {
-      tnode = bsplineTfm;
+      tnode = bsplineTfm.GetPointer();
       }
-    else if (storageNode->ReadData(linearTfm))
+    else if (storageNode->ReadData(linearTfm.GetPointer()))
       {
-      tnode = linearTfm;
+      tnode = linearTfm.GetPointer();
       }
 
     if (tnode)
@@ -151,20 +153,16 @@ vtkMRMLTransformNode* vtkSlicerTransformLogic::AddTransform (const char* filenam
         itksys::SystemTools::GetFilenameWithoutExtension(fname));
       const std::string uname( scene->GetUniqueNameByString(basename.c_str()));
       tnode->SetName(uname.c_str());
-      scene->AddNode(storageNode);
+      scene->AddNode(storageNode.GetPointer());
       scene->AddNode(tnode);
 
       tnode->SetAndObserveStorageNodeID(storageNode->GetID());
       }
-    gridTfm->Delete();
-    bsplineTfm->Delete();
-    linearTfm->Delete();
     }
   else
     {
     vtkErrorMacro("Unsupported transform file format: " << filename);
     }
-  storageNode->Delete();
 
   return tnode;
 }

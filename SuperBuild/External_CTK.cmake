@@ -1,52 +1,37 @@
 
-# Make sure this file is included only once
-get_filename_component(CMAKE_CURRENT_LIST_FILENAME ${CMAKE_CURRENT_LIST_FILE} NAME_WE)
-if(${CMAKE_CURRENT_LIST_FILENAME}_FILE_INCLUDED)
-  return()
-endif()
-set(${CMAKE_CURRENT_LIST_FILENAME}_FILE_INCLUDED 1)
-
-# Sanity checks
-if(DEFINED CTK_DIR AND NOT EXISTS ${CTK_DIR})
-  message(FATAL_ERROR "CTK_DIR variable is defined but corresponds to non-existing directory")
-endif()
+set(proj CTK)
 
 # Set dependency list
-set(CTK_DEPENDENCIES VTK ${ITK_EXTERNAL_NAME})
+set(${proj}_DEPENDENCIES VTK ${ITK_EXTERNAL_NAME})
 if(Slicer_USE_PYTHONQT)
-  list(APPEND CTK_DEPENDENCIES python)
+  list(APPEND ${proj}_DEPENDENCIES python)
 endif()
 if(Slicer_BUILD_DICOM_SUPPORT)
-  list(APPEND CTK_DEPENDENCIES DCMTK)
+  list(APPEND ${proj}_DEPENDENCIES DCMTK)
 endif()
 
 # Include dependent projects if any
-SlicerMacroCheckExternalProjectDependency(CTK)
-set(proj CTK)
+ExternalProject_Include_Dependencies(${proj} PROJECT_VAR proj DEPENDS_VAR ${proj}_DEPENDENCIES)
 
-if(NOT DEFINED CTK_DIR)
-  #message(STATUS "${__indent}Adding project ${proj}")
+if(${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
+  message(FATAL_ERROR "Enabling ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj} is not supported !")
+endif()
+
+# Sanity checks
+if(DEFINED CTK_DIR AND NOT EXISTS ${CTK_DIR})
+  unset(CTK_DIR CACHE)
+  find_package(CTK 0.1.0 REQUIRED NO_MODULE)
+endif()
+
+if(NOT DEFINED CTK_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
 
   set(EXTERNAL_PROJECT_OPTIONAL_ARGS)
 
-  # Set CMake OSX variable to pass down the external project
-  if(APPLE)
-    list(APPEND EXTERNAL_PROJECT_OPTIONAL_ARGS
-      -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}
-      -DCMAKE_OSX_SYSROOT=${CMAKE_OSX_SYSROOT}
-      -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET})
-  endif()
-
-  if(NOT CMAKE_CONFIGURATION_TYPES)
-    list(APPEND EXTERNAL_PROJECT_OPTIONAL_ARGS
-      -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE})
-  endif()
-
   if(Slicer_USE_PYTHONQT)
     list(APPEND EXTERNAL_PROJECT_OPTIONAL_ARGS
-      -DPYTHON_LIBRARY:FILEPATH=${slicer_PYTHON_LIBRARY}
-      -DPYTHON_INCLUDE_DIR:PATH=${slicer_PYTHON_INCLUDE}
-      -DPYTHON_EXECUTABLE:FILEPATH=${slicer_PYTHON_EXECUTABLE}
+      -DPYTHON_LIBRARY:FILEPATH=${PYTHON_LIBRARY}
+      -DPYTHON_INCLUDE_DIR:PATH=${PYTHON_INCLUDE_DIR}
+      -DPYTHON_EXECUTABLE:FILEPATH=${PYTHON_EXECUTABLE}
       -DCTK_LIB_Scripting/Python/Core:BOOL=${Slicer_USE_PYTHONQT}
       -DCTK_LIB_Scripting/Python/Core_PYTHONQT_USE_VTK:BOOL=${Slicer_USE_PYTHONQT}
       -DCTK_LIB_Scripting/Python/Core_PYTHONQT_WRAP_QTCORE:BOOL=${Slicer_USE_PYTHONQT}
@@ -61,6 +46,7 @@ if(NOT DEFINED CTK_DIR)
 
   if(Slicer_BUILD_DICOM_SUPPORT)
     list(APPEND EXTERNAL_PROJECT_OPTIONAL_ARGS
+      -DCTK_USE_SYSTEM_DCMTK:BOOL=${CTK_USE_SYSTEM_DCMTK}
       -DDCMTK_DIR:PATH=${DCMTK_DIR}
       )
   endif()
@@ -70,12 +56,12 @@ if(NOT DEFINED CTK_DIR)
   endif()
 
   ExternalProject_Add(${proj}
+    ${${proj}_EP_ARGS}
     GIT_REPOSITORY "${git_protocol}://github.com/commontk/CTK.git"
-    GIT_TAG "0036612b89ad2b62b016cf1cf140085a160ded95"
+    GIT_TAG "8bebbc92df4b310c150e6a017b6b8966b4625089"
     SOURCE_DIR ${CMAKE_BINARY_DIR}/${proj}
     BINARY_DIR ${proj}-build
-    CMAKE_GENERATOR ${gen}
-    CMAKE_ARGS
+    CMAKE_CACHE_ARGS
       -DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}
       -DCMAKE_CXX_FLAGS:STRING=${ep_common_cxx_flags}
       -DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}
@@ -89,7 +75,9 @@ if(NOT DEFINED CTK_DIR)
       -DCTK_INSTALL_QTPLUGIN_DIR:STRING=${Slicer_INSTALL_QtPlugins_DIR}
       -DCTK_USE_GIT_PROTOCOL:BOOL=${Slicer_USE_GIT_PROTOCOL}
       -DQT_QMAKE_EXECUTABLE:FILEPATH=${QT_QMAKE_EXECUTABLE}
+      -DCTK_USE_SYSTEM_VTK:BOOL=${CTK_USE_SYSTEM_VTK}
       -DVTK_DIR:PATH=${VTK_DIR}
+      -DCTK_USE_SYSTEM_ITK:BOOL=${CTK_USE_SYSTEM_ITK}
       -DITK_DIR:PATH=${ITK_DIR}
       -DCTK_LIB_Widgets:BOOL=ON
       -DCTK_LIB_Visualization/VTK/Widgets:BOOL=ON
@@ -103,14 +91,18 @@ if(NOT DEFINED CTK_DIR)
       -DCTK_USE_QTTESTING:BOOL=${Slicer_USE_QtTesting}
       -DGIT_EXECUTABLE:FILEPATH=${GIT_EXECUTABLE}
       ${EXTERNAL_PROJECT_OPTIONAL_ARGS}
+    PATCH_COMMAND perl -p -i -e "s/^(install\\(EXPORT CTKExports DESTINATION \\\$\\{CTK_INSTALL_CMAKE_DIR\\}\\))\$/\#\\1/" CMake/LastConfigureStep/CTKGenerateCTKConfig.cmake
     INSTALL_COMMAND ""
     DEPENDS
-      ${CTK_DEPENDENCIES}
+      ${${proj}_DEPENDENCIES}
     )
   set(CTK_DIR ${CMAKE_BINARY_DIR}/${proj}-build)
 
 else()
-  # The project is provided using CTK_DIR, nevertheless since other project may depend on CTK,
-  # let's add an 'empty' one
-  SlicerMacroEmptyExternalProject(${proj} "${CTK_DEPENDENCIES}")
+  ExternalProject_Add_Empty(${proj} DEPENDS ${${proj}_DEPENDENCIES})
 endif()
+
+mark_as_superbuild(
+  VARS CTK_DIR:PATH
+  LABELS "FIND_PACKAGE"
+  )

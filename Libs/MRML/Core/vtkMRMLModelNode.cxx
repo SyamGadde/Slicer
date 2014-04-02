@@ -80,6 +80,7 @@ void vtkMRMLModelNode::ProcessMRMLEvents ( vtkObject *caller,
       this->PolyData != 0 &&
       event ==  vtkCommand::ModifiedEvent)
     {
+    this->StorableModifiedTime.Modified();
     this->InvokeEvent(vtkMRMLModelNode::PolyDataModifiedEvent, NULL);
     }
   this->Superclass::ProcessMRMLEvents(caller, event, callData);
@@ -135,6 +136,7 @@ void vtkMRMLModelNode::SetAndObservePolyData(vtkPolyData *polyData)
     oldPolyData->UnRegister(this);
     }
 
+  this->StorableModifiedTime.Modified();
   this->Modified();
   this->InvokeEvent( vtkMRMLModelNode::PolyDataModifiedEvent , this);
 }
@@ -590,7 +592,10 @@ vtkMRMLStorageNode* vtkMRMLModelNode::CreateDefaultStorageNode()
 //---------------------------------------------------------------------------
 void vtkMRMLModelNode::OnNodeReferenceAdded(vtkMRMLNodeReference *reference)
 {
-  this->UpdateDisplayNodePolyData(vtkMRMLDisplayNode::SafeDownCast(reference->ReferencedNode));
+  if (std::string(reference->GetReferenceRole()) == this->DisplayNodeReferenceRole)
+    {
+    this->UpdateDisplayNodePolyData(vtkMRMLDisplayNode::SafeDownCast(reference->ReferencedNode));
+    }
   Superclass::OnNodeReferenceAdded(reference);
 }
 

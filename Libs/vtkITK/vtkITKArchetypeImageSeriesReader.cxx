@@ -376,7 +376,6 @@ void vtkITKArchetypeImageSeriesReader::ExecuteInformation()
     {
       typedef itk::GDCMSeriesFileNames DICOMNameGeneratorType;
       DICOMNameGeneratorType::Pointer inputImageFileGenerator = DICOMNameGeneratorType::New();
-      std::string fileNameName = itksys::SystemTools::GetFilenameName( this->Archetype );
       std::string fileNamePath = itksys::SystemTools::GetFilenamePath( this->Archetype );
       if (fileNamePath == "")
       {
@@ -735,49 +734,185 @@ void vtkITKArchetypeImageSeriesReader::ExecuteInformation()
   output->SetWholeExtent(extent);
   if (this->UseNativeScalarType)
     {
-      if (imageIO.GetPointer() == NULL) 
+    // If there is only one file in the series
+    if (this->FileNames.size() == 1)
       {
-      this->SetOutputScalarType(VTK_SHORT); // TODO - figure out why multi-file series doen't have an imageIO
+      if (imageIO.GetPointer() == NULL)
+        {
+        this->SetOutputScalarType(VTK_SHORT); // TODO - figure out why multi-file series doen't have an imageIO
+        }
+      else if (imageIO->GetComponentType() == itk::ImageIOBase::UCHAR)
+        {
+        this->SetOutputScalarType(VTK_UNSIGNED_CHAR);
+        }
+      else if (imageIO->GetComponentType() == itk::ImageIOBase::CHAR)
+        {
+        this->SetOutputScalarType(VTK_CHAR);
+        }
+      else if (imageIO->GetComponentType() == itk::ImageIOBase::USHORT)
+        {
+        this->SetOutputScalarType(VTK_UNSIGNED_SHORT);
+        }
+      else if (imageIO->GetComponentType() == itk::ImageIOBase::SHORT)
+        {
+        this->SetOutputScalarType(VTK_SHORT);
+        }
+      else if (imageIO->GetComponentType() == itk::ImageIOBase::UINT)
+        {
+        this->SetOutputScalarType(VTK_UNSIGNED_INT);
+        }
+      else if (imageIO->GetComponentType() == itk::ImageIOBase::INT)
+        {
+        this->SetOutputScalarType(VTK_INT);
+        }
+      else if (imageIO->GetComponentType() == itk::ImageIOBase::ULONG)
+        {
+        this->SetOutputScalarType(VTK_UNSIGNED_LONG);
+        }
+      else if (imageIO->GetComponentType() == itk::ImageIOBase::LONG)
+        {
+        this->SetOutputScalarType(VTK_LONG);
+        }
+      else if (imageIO->GetComponentType() == itk::ImageIOBase::FLOAT)
+        {
+        this->SetOutputScalarType(VTK_FLOAT);
+        }
+      else if (imageIO->GetComponentType() == itk::ImageIOBase::DOUBLE)
+        {
+        this->SetOutputScalarType(VTK_DOUBLE);
+        }
       }
-    else if (imageIO->GetComponentType() == itk::ImageIOBase::UCHAR)
+    else
       {
-      this->SetOutputScalarType(VTK_UNSIGNED_CHAR);
-      }
-    else if (imageIO->GetComponentType() == itk::ImageIOBase::CHAR)
-      {
-      this->SetOutputScalarType(VTK_CHAR);
-      }
-    else if (imageIO->GetComponentType() == itk::ImageIOBase::USHORT)
-      {
-      this->SetOutputScalarType(VTK_UNSIGNED_SHORT);
-      }
-    else if (imageIO->GetComponentType() == itk::ImageIOBase::SHORT)
-      {
-      this->SetOutputScalarType(VTK_SHORT);
-      }
-    else if (imageIO->GetComponentType() == itk::ImageIOBase::UINT)
-      {
-      this->SetOutputScalarType(VTK_UNSIGNED_INT);
-      }
-    else if (imageIO->GetComponentType() == itk::ImageIOBase::INT)
-      {
-      this->SetOutputScalarType(VTK_INT);
-      }
-    else if (imageIO->GetComponentType() == itk::ImageIOBase::ULONG)
-      {
-      this->SetOutputScalarType(VTK_UNSIGNED_LONG);
-      }
-    else if (imageIO->GetComponentType() == itk::ImageIOBase::LONG)
-      {
-      this->SetOutputScalarType(VTK_LONG);
-      }
-    else if (imageIO->GetComponentType() == itk::ImageIOBase::FLOAT)
-      {
-      this->SetOutputScalarType(VTK_FLOAT);
-      }
-    else if (imageIO->GetComponentType() == itk::ImageIOBase::DOUBLE)
-      {
-      this->SetOutputScalarType(VTK_DOUBLE);
+      double min = 0, max = 0;
+
+      for( unsigned int f = 0; f < this->FileNames.size(); f++ )
+        {
+        imageIO->SetFileName( this->FileNames[f] );
+        imageIO->ReadImageInformation();
+
+        if ( imageIO->GetComponentType() == itk::ImageIOBase::UCHAR )
+          {
+          min = std::numeric_limits<uint8_t>::min() < min ? std::numeric_limits<uint8_t>::min() : min;
+          max = std::numeric_limits<uint8_t>::max() > max ? std::numeric_limits<uint8_t>::max() : max;
+          }
+        if ( imageIO->GetComponentType() == itk::ImageIOBase::CHAR )
+          {
+          min = std::numeric_limits<int8_t>::min() < min ? std::numeric_limits<int8_t>::min() : min;
+          max = std::numeric_limits<int8_t>::max() > max ? std::numeric_limits<int8_t>::max() : max;
+          }
+        if ( imageIO->GetComponentType() == itk::ImageIOBase::USHORT )
+          {
+          min = std::numeric_limits<uint16_t>::min() < min ? std::numeric_limits<uint16_t>::min() : min;
+          max = std::numeric_limits<uint16_t>::max() > max ? std::numeric_limits<uint16_t>::max() : max;
+          }
+        if ( imageIO->GetComponentType() == itk::ImageIOBase::SHORT )
+          {
+          min = std::numeric_limits<int16_t>::min() < min ? std::numeric_limits<int16_t>::min() : min;
+          max = std::numeric_limits<int16_t>::max() > max ? std::numeric_limits<int16_t>::max() : max;
+          }
+        if ( imageIO->GetComponentType() == itk::ImageIOBase::UINT )
+          {
+          min = std::numeric_limits<uint32_t>::min() < min ? std::numeric_limits<uint32_t>::min() : min;
+          max = std::numeric_limits<uint32_t>::max() > max ? std::numeric_limits<uint32_t>::max() : max;
+          }
+        if ( imageIO->GetComponentType() == itk::ImageIOBase::INT )
+          {
+          min = std::numeric_limits<int32_t>::min() < min ? std::numeric_limits<int32_t>::min() : min;
+          max = std::numeric_limits<int32_t>::max() > max ? std::numeric_limits<int32_t>::max() : max;
+          }
+        if ( imageIO->GetComponentType() == itk::ImageIOBase::ULONG )
+          { // note that on windows ULONG is only 32 bit
+          min = std::numeric_limits<uint64_t>::min() < min ? std::numeric_limits<uint64_t>::min() : min;
+          max = std::numeric_limits<uint64_t>::max() > max ? std::numeric_limits<uint64_t>::max() : max;
+          }
+        if ( imageIO->GetComponentType() == itk::ImageIOBase::LONG )
+          { // note that on windows LONG is only 32 bit
+          min = std::numeric_limits<int64_t>::min() < min ? std::numeric_limits<int64_t>::min() : min;
+          max = std::numeric_limits<int64_t>::max() > max ? std::numeric_limits<int64_t>::max() : max;
+          }
+        if ( imageIO->GetComponentType() == itk::ImageIOBase::FLOAT )
+          {
+          // use -max() as min() for both float and double as temp workaround
+          // should switch to lowest() function in C++ 11 in the future
+          min = -std::numeric_limits<float>::max() < min ? -std::numeric_limits<float>::max() : min;
+          max = std::numeric_limits<float>::max() > max ? std::numeric_limits<float>::max() : max;
+          }
+        if ( imageIO->GetComponentType() == itk::ImageIOBase::DOUBLE )
+          {
+          min = -std::numeric_limits<double>::max() < min ? -std::numeric_limits<double>::max() : min;
+          max = std::numeric_limits<double>::max() > max ? std::numeric_limits<double>::max() : max;
+          }
+        }
+      assert( min <= max );
+      if( min >= 0 ) // unsigned
+        {
+        if( max <= std::numeric_limits<uint8_t>::max() )
+          {
+          this->SetOutputScalarType(VTK_UNSIGNED_CHAR);
+          }
+        else if( max <= std::numeric_limits<uint16_t>::max() )
+          {
+          this->SetOutputScalarType(VTK_UNSIGNED_SHORT);
+          }
+        else if( max <= std::numeric_limits<uint32_t>::max() )
+          {
+          this->SetOutputScalarType(VTK_UNSIGNED_INT);
+          }
+        else if( max <= std::numeric_limits<uint64_t>::max() )
+          {
+          this->SetOutputScalarType(VTK_UNSIGNED_LONG);
+          }
+        else if( max <= std::numeric_limits<float>::max() )
+          {
+          this->SetOutputScalarType(VTK_FLOAT);
+          }
+        else if( max <= std::numeric_limits<double>::max() )
+          {
+          this->SetOutputScalarType(VTK_DOUBLE);
+          }
+        else
+          {
+          assert(0);
+          }
+        }
+      else
+        {
+        if( max <= std::numeric_limits<int8_t>::max()
+          && min >= std::numeric_limits<int8_t>::min() )
+          {
+          this->SetOutputScalarType(VTK_CHAR);
+          }
+        else if( max <= std::numeric_limits<int16_t>::max()
+          && min >= std::numeric_limits<int16_t>::min() )
+          {
+          this->SetOutputScalarType(VTK_SHORT);
+          }
+        else if( max <= std::numeric_limits<int32_t>::max()
+          && min >= std::numeric_limits<int32_t>::min() )
+          {
+          this->SetOutputScalarType(VTK_INT);
+          }
+        else if( max <= std::numeric_limits<int64_t>::max()
+          && min >= std::numeric_limits<int64_t>::min() )
+          {
+          this->SetOutputScalarType(VTK_LONG);
+          }
+        else if ( max <= std::numeric_limits<float>::max()
+          && min >= -std::numeric_limits<float>::max() )
+          {
+          this->SetOutputScalarType(VTK_FLOAT);
+          }
+        else if( max <= std::numeric_limits<double>::max()
+          && min >= -std::numeric_limits<double>::max() )
+          {
+          this->SetOutputScalarType(VTK_DOUBLE);
+          }
+        else
+          {
+          assert(0);
+          }
+        }
       }
     }
 
@@ -944,16 +1079,42 @@ void vtkITKArchetypeImageSeriesReader::AnalyzeDicomHeaders()
 
   itk::GDCMImageIO::Pointer gdcmIO = itk::GDCMImageIO::New();
   if ( !gdcmIO->CanReadFile(this->Archetype) )
-  {
-    for (int f = 0; f < nFiles; f++)
     {
+    itk::ImageIOBase::Pointer lastImageIO;
+    for (int f = 0; f < nFiles; f++)
+      {
       itk::ImageFileReader<ImageType>::Pointer imageReader =
         itk::ImageFileReader<ImageType>::New();
-      imageReader->SetFileName( this->AllFileNames[f] );
-      imageReader->UpdateOutputInformation();
+      const std::string& fileName = this->AllFileNames[f];
+      imageReader->SetFileName( fileName );
+      // Try first to reuse the same imageIO for each file. If it fails, then use
+      // the default imageIO
+      if (lastImageIO && (lastImageIO->CanReadFile(fileName.c_str())))
+        {
+        imageReader->SetImageIO(lastImageIO);
+        }
+      else
+        {
+        imageReader->UpdateOutputInformation();
+        lastImageIO = imageReader->GetImageIO();
+        }
+
+      // Don't read the image header if it is a 2D file type.
+      std::string IOType = imageReader->GetImageIO()->GetNameOfClass();
+      bool ioHas3DInformation =
+        IOType.find("BPMImageIO") != std::string::npos &&
+        IOType.find("JPEGImageIO") != std::string::npos &&
+        IOType.find("PNGImageIO") != std::string::npos &&
+        IOType.find("TIFFImageIO") != std::string::npos &&
+        IOType.find("RawImageIO") != std::string::npos;
+      if (ioHas3DInformation)
+        {
+        imageReader->UpdateOutputInformation();
+        lastImageIO = imageReader->GetImageIO();
+        }
 
       // insert series 
-      int idx = InsertSeriesInstanceUIDs( "Non-Dicom Series" );
+      int idx = this->InsertSeriesInstanceUIDs( "Non-Dicom Series" );
       this->IndexSeriesInstanceUIDs[f] = idx;
 
       // for now, assume ContentTime, TriggerTime, and DiffusionGradientOrientation do not exist
@@ -963,36 +1124,35 @@ void vtkITKArchetypeImageSeriesReader::AnalyzeDicomHeaders()
       this->IndexDiffusionGradientOrientation[f] = -1;
 
       // Slice Location
-      ImageType::PointType origin = imageReader->GetOutput()->GetOrigin();
-      std::string IOType = imageReader->GetImageIO()->GetNameOfClass();
-      if( IOType.find("BPMImageIO") == std::string::npos ||
-          IOType.find("JPEGImageIO") == std::string::npos ||
-          IOType.find("PNGImageIO") == std::string::npos ||
-          IOType.find("TIFFImageIO") == std::string::npos ||
-          IOType.find("RawImageIO") == std::string::npos )
-      {
-        idx = InsertSliceLocation( static_cast<float>(f) );
-        this->IndexSliceLocation[f] = idx;    
-      }
+      if (ioHas3DInformation)
+        {
+        ImageType::PointType origin = imageReader->GetOutput()->GetOrigin();
+        idx = this->InsertSliceLocation( origin[2] );
+        }
       else
-      {
-        idx = InsertSliceLocation( origin[2] );
-        this->IndexSliceLocation[f] = idx;    
-      }
+        {
+        idx = this->InsertNextSliceLocation();
+        }
+      this->IndexSliceLocation[f] = idx;
 
       // Orientation
-      ImageType::DirectionType orientation = imageReader->GetOutput()->GetDirection();
-      float a[6];
-      for (int k = 0; k < 3; k++)
-      {
-        a[k] = orientation[0][k];
-        a[k+3] = orientation[1][k];
+      float sliceOrientation[6] = {1., 0., 0.,
+                                   0., 1., 0.};
+      if (ioHas3DInformation)
+        {
+        ImageType::DirectionType orientation =
+          imageReader->GetOutput()->GetDirection();
+        for (int k = 0; k < 3; k++)
+          {
+          sliceOrientation[k] = orientation[0][k];
+          sliceOrientation[k+3] = orientation[1][k];
+          }
+        }
+      idx = this->InsertImageOrientationPatient( sliceOrientation );
+      this->IndexImageOrientationPatient[f] = idx;
       }
-      idx = InsertImageOrientationPatient( a );
-      this->IndexImageOrientationPatient[f] = idx;    
-    }
     return;
-  }
+    }
 
   // if Archetype is a Dicom File
   gdcmIO->SetFileName( this->Archetype );

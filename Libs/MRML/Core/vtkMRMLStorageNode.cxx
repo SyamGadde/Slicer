@@ -29,6 +29,7 @@ Version:   $Revision: 1.1.1.1 $
 #include <vtksys/SystemTools.hxx>
 
 // STD includes
+#include <algorithm>
 #include <sstream>
 
 //----------------------------------------------------------------------------
@@ -37,6 +38,7 @@ vtkCxxSetObjectMacro(vtkMRMLStorageNode, URIHandler, vtkURIHandler)
 //----------------------------------------------------------------------------
 vtkMRMLStorageNode::vtkMRMLStorageNode()
 {
+  this->HideFromEditors = 1;
   this->FileName = NULL;
   this->TempFileName = NULL;
   this->URI = NULL;
@@ -309,11 +311,7 @@ void vtkMRMLStorageNode::Copy(vtkMRMLNode *anode)
   Superclass::Copy(anode);
   vtkMRMLStorageNode *node = (vtkMRMLStorageNode *) anode;
   this->SetFileName(node->FileName);
-  this->ResetFileNameList();
-  for (int i = 0; i < node->GetNumberOfFileNames(); i++)
-    {
-    this->AddFileName(node->GetNthFileName(i));
-    }
+  this->FileNameList = node->FileNameList; // a loop on AddFileName would be n log(n)
   this->SetURI(node->URI);
   this->ResetURIList();
   for (int i = 0; i < node->GetNumberOfURIs(); i++)
@@ -675,28 +673,31 @@ int vtkMRMLStorageNode::SupportedFileType(const char *fileName)
     {
     return 1;
     }
-  std::string extension;
-  std::string::size_type extensionPos = name.find_last_of(".");
-  if( extensionPos != std::string::npos )
-    {
-    extension = name.substr(extensionPos);
-    }
+  std::string extension = vtkMRMLStorageNode::GetLowercaseExtensionFromFileName(name);
 
   for (int i = 0; i < supportedReadFileTypes->GetNumberOfTuples(); ++i)
     {
-    std::string supportedFileType = supportedReadFileTypes->GetValue(i);
-    extensionPos = supportedFileType.find_last_of(".");
+    std::string supportedFileType = supportedReadFileTypes->GetValue(i); // "Color Table (.ctbl)"
+    std::string::size_type extensionPos = supportedFileType.find_last_of(".");
     std::string supportedExtension;
     if( extensionPos != std::string::npos )
       {
-      supportedExtension = supportedFileType.substr(extensionPos);
+      supportedExtension = vtksys::SystemTools::LowerCase( supportedFileType.substr(extensionPos) ); // ".ctbl"
       }
-    if (supportedExtension.size() == 0 ||
-        (supportedExtension[1] == '*' && extension.size() > 0))
+
+    if (supportedExtension.empty())
       {
       // No extension means all extensions are supported
       return 1;
       }
+    if (supportedExtension.size() >=2 && supportedExtension[1] == '*' && !extension.empty() )
+      {
+      // .* supported extension means all extensions are supported
+      return 1;
+      }
+    // Only compare up to the length of extension, as supportedExtension usually contains some
+    // additional character, such as parentheses. For example: .ctbl
+    // XXX It would be nicer to parse the supportedFileType string properly and do an exact comparison
     if (extension.compare(0, extension.size(), supportedExtension, 0, extension.size()) == 0)
       {
       return 1;
@@ -712,55 +713,35 @@ int vtkMRMLStorageNode::FileNameIsInList(const char *fileName)
     {
     return 0;
     }
-  std::string fname = std::string(fileName);
-  int fileNameIsRelative =  this->IsFilePathRelative(fileName);
-  for (unsigned int i = 0; i < this->FileNameList.size(); i++)
+  const std::string fileNameString(fileName);
+  const int fileNameIsRelative =  this->IsFilePathRelative(fileName);
+  const char *rootDir = this->Scene ? this->Scene->GetRootDirectory() : ".";
+  const std::string relativeFileName = fileNameIsRelative ?
+    fileNameString : vtksys::SystemTools::RelativePath(rootDir, fileName);
+
+  for (std::vector<std::string>::const_iterator it = this->FileNameList.begin();
+       it != this->FileNameList.end(); ++it)
     {
-    std::string thisFile = this->FileNameList[i];
-    int thisFileIsRelative = this->IsFilePathRelative(thisFile.c_str());
+    const int thisFileIsRelative = this->IsFilePathRelative(it->c_str());
     // make sure we're comparing apples to apples
     if (fileNameIsRelative != thisFileIsRelative)
       {
-      std::string rel1, rel2;
-      const char *rootDir;
-      if ( this->Scene )
-        {
-        rootDir = this->Scene->GetRootDirectory();
-        }
-      else
-        {
-        rootDir = ".";
-        }
-      vtkDebugMacro("WARNING: trying to determine if file " << fileName << " is already in the list and comparing against " << thisFile.c_str() << ", they have mismatched absolute/relative paths. Using scene root dir to disambiguate: " << rootDir);
-      if (fileNameIsRelative)
-        {
-        rel1 = std::string(fileName);
-        }
-      else
-        {
-        rel1 = vtksys::SystemTools::RelativePath(rootDir, fileName);
-        }
-      if (thisFileIsRelative)
-        {
-        rel2 = thisFile;
-        }
-      else
-        {
-        rel2 = vtksys::SystemTools::RelativePath(rootDir, thisFile.c_str());
-        }
-        
-      vtkDebugMacro("\tComparing " << rel1 << " and " << rel2);
-      if (rel1.compare(rel2) == 0)
+      vtkDebugMacro("WARNING: trying to determine if file " << fileName
+        << " is already in the list and comparing against " << it->c_str()
+        << ", they have mismatched absolute/relative paths. "
+        << "Using scene root dir to disambiguate: " << rootDir);
+      std::string thisRelativeFileName = thisFileIsRelative ?
+        *it : vtksys::SystemTools::RelativePath(rootDir, it->c_str());
+      vtkDebugMacro("\tComparing " << relativeFileName
+        << " and " << thisRelativeFileName);
+      if ( relativeFileName == thisRelativeFileName )
         {
         return 1;
         }
       }
-    else
+    else if (*it == fileNameString)
       {
-      if (fname.compare(this->FileNameList[i]) == 0)
-        {
-        return 1;
-        }
+      return 1;
       }
     }
   return 0;
@@ -972,16 +953,8 @@ int vtkMRMLStorageNode::IsFilePathRelative(const char * filepath)
     }
   else
     {
-    std::vector<std::string> components;
-    vtksys::SystemTools::SplitPath((const char*)filepath, components);
-    if (components[0] == "") 
-      {
-      return 1;
-      }
-    else
-      {
-      return 0;
-      }
+    const bool absoluteFilePath = vtksys::SystemTools::FileIsFullPath(filepath);
+    return absoluteFilePath ? 0 : 1;
     }
 }
 
@@ -1139,4 +1112,11 @@ int vtkMRMLStorageNode::ReadDataInternal(vtkMRMLNode* vtkNotUsed(refNode))
 int vtkMRMLStorageNode::WriteDataInternal(vtkMRMLNode* vtkNotUsed(refNode))
 {
   return 0;
+}
+
+//------------------------------------------------------------------------------
+std::string vtkMRMLStorageNode::GetLowercaseExtensionFromFileName(const std::string& filename)
+{
+  std::string extension = vtksys::SystemTools::GetFilenameLastExtension(filename);
+  return vtksys::SystemTools::LowerCase(extension);
 }

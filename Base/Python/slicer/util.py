@@ -165,6 +165,17 @@ def loadFiducialList(filename, returnNode=False):
   filetype = 'FiducialListFile'
   return loadNodeFromFile(filename, filetype, {}, returnNode)
 
+def loadAnnotationFiducial(filename, returnNode=False):
+  filetype = 'AnnotationFile'
+  properties = {}
+  properties['fiducial'] = 1
+  return loadNodeFromFile(filename, filetype, properties, returnNode)
+
+def loadMarkupsFiducialList(filename, returnNode=False):
+  filetype = 'MarkupsFiducials'
+  properties = {}
+  return loadNodeFromFile(filename, filetype, properties, returnNode)
+
 def loadModel(filename, returnNode=False):
   filetype = 'ModelFile'
   return loadNodeFromFile(filename, filetype, {}, returnNode)
@@ -177,7 +188,7 @@ def loadTransform(filename, returnNode=False):
   filetype = 'TransformFile'
   return loadNodeFromFile(filename, filetype, {}, returnNode)
 
-def loadLabelVolume(filename, properties, returnNode=False):
+def loadLabelVolume(filename, properties={}, returnNode=False):
   filetype = 'VolumeFile'
   properties['labelmap'] = True
   return loadNodeFromFile(filename, filetype, properties, returnNode)
@@ -309,6 +320,70 @@ def getNewModuleGui(module):
     print("Could not find module widget representation with name '%s" % module.name, file=sys.stderr)
   return widgetRepr
 
+def modulePath(moduleName):
+  import slicer
+  return eval('slicer.modules.%s.path' % moduleName.lower())
+
+def reloadScriptedModule(moduleName):
+  """Generic reload method for any scripted module.
+  """
+  import imp, sys, os
+  import slicer
+
+  widgetName = moduleName + "Widget"
+
+  # reload the source code
+  filePath = modulePath(moduleName)
+  p = os.path.dirname(filePath)
+  if not p in sys.path:
+    sys.path.insert(0,p)
+  with open(filePath, "r") as fp:
+    reloaded_module = imp.load_module(
+        moduleName, fp, filePath, ('.py', 'r', imp.PY_SOURCE))
+
+  # find and hide the existing widget
+  parent = eval('slicer.modules.%s.widgetRepresentation()' % moduleName.lower())
+  for child in parent.children():
+    try:
+      child.hide()
+    except AttributeError:
+      pass
+
+  # remove spacer items
+  item = parent.layout().itemAt(0)
+  while item:
+    parent.layout().removeItem(item)
+    item = parent.layout().itemAt(0)
+
+  # delete the old widget instance
+  if hasattr(slicer.modules, widgetName):
+    w = getattr(slicer.modules, widgetName)
+    if hasattr(w, 'cleanup'):
+      w.cleanup()
+
+  # create new widget inside existing parent
+  widget = eval('reloaded_module.%s(parent)' % widgetName)
+  widget.setup()
+  setattr(slicer.modules, widgetName, widget)
+
+  return reloaded_module
+
+#
+# Layout
+#
+
+def resetThreeDViews():
+  """Reset focal view around volumes
+  """
+  import slicer
+  slicer.app.layoutManager().resetThreeDViews()
+
+def resetSliceViews():
+  """Reset focal view around volumes
+  """
+  import slicer
+  manager = slicer.app.layoutManager().resetSliceViews()
+
 #
 # MRML
 #
@@ -339,6 +414,14 @@ def getNode(pattern = "", index = 0):
         return nodes.values()[index]
     except IndexError:
       return None
+
+def getFirstNodeByClassByName(className, name):
+  import slicer
+  nodes = slicer.mrmlScene.GetNodesByClassByName(className, name)
+  nodes.UnRegister(nodes)
+  if nodes.GetNumberOfItems() > 0:
+    return nodes.GetItemAsObject(0)
+  return None
 
 #
 # MRML-numpy
@@ -377,3 +460,37 @@ def array(pattern = "", index = 0):
     return a
   # TODO: accessors for other node types: polydata (verts, polys...), colors
 
+
+#
+# VTK
+#
+
+class VTKObservationMixin(object):
+  def __init__(self):
+    super(VTKObservationMixin, self).__init__()
+    self.Observations = []
+
+  def removeObservers(self, method):
+    for o, e, m, g, t in self.Observations:
+      if method == m:
+        o.RemoveObserver(t)
+        self.Observations.remove([o, e, m, g, t])
+
+  def addObserver(self, object, event, method, group = 'none'):
+    if self.hasObserver(object, event, method):
+      print('already has observer')
+      return
+    tag = object.AddObserver(event, method)
+    self.Observations.append([object, event, method, group, tag])
+
+  def hasObserver(self, object, event, method):
+    for o, e, m, g, t in self.Observations:
+      if o == object and e == event and m == method:
+        return True
+    return False
+
+  def observer(self, event, method):
+    for o, e, m, g, t in self.Observations:
+      if e == event and m == method:
+        return o
+    return None

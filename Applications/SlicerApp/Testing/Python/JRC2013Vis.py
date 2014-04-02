@@ -119,40 +119,7 @@ class JRC2013VisWidget:
     """Generic reload method for any scripted module.
     ModuleWizard will subsitute correct default moduleName.
     """
-    import imp, sys, os, slicer
-
-    widgetName = moduleName + "Widget"
-
-    # reload the source code
-    # - set source file path
-    # - load the module to the global space
-    filePath = eval('slicer.modules.%s.path' % moduleName.lower())
-    p = os.path.dirname(filePath)
-    if not sys.path.__contains__(p):
-      sys.path.insert(0,p)
-    fp = open(filePath, "r")
-    globals()[moduleName] = imp.load_module(
-        moduleName, fp, filePath, ('.py', 'r', imp.PY_SOURCE))
-    fp.close()
-
-    # rebuild the widget
-    # - find and hide the existing widget
-    # - create a new widget in the existing parent
-    parent = slicer.util.findChildren(name='%s Reload' % moduleName)[0].parent()
-    for child in parent.children():
-      try:
-        child.hide()
-      except AttributeError:
-        pass
-    # Remove spacer items
-    item = parent.layout().itemAt(0)
-    while item:
-      parent.layout().removeItem(item)
-      item = parent.layout().itemAt(0)
-    # create new widget inside existing parent
-    globals()[widgetName.lower()] = eval(
-        'globals()["%s"].%s(parent)' % (moduleName, widgetName))
-    globals()[widgetName.lower()].setup()
+    globals()[moduleName] = slicer.util.reloadScriptedModule(moduleName)
 
   def onReloadAndTest(self,moduleName="JRC2013Vis"):
     self.onReload()
@@ -404,7 +371,6 @@ class JRC2013VisTest(unittest.TestCase):
       self.delayDisplay('Retrieve DICOM')
       mainWindow = slicer.util.mainWindow()
       mainWindow.moduleSelector().selectModule('DICOM')
-      dicomWidget.dicomApp.suspendModel()
       dicomRetrieve = ctk.ctkDICOMRetrieve()
       dicomRetrieve.setKeepAssociationOpen(True)
       dicomRetrieve.setDatabase(slicer.dicomDatabase)
@@ -413,7 +379,6 @@ class JRC2013VisTest(unittest.TestCase):
       dicomRetrieve.setPort(12345)
       dicomRetrieve.setHost('localhost')
       dicomRetrieve.getStudy('1.2.124.113932.1.170.223.162.178.20050502.160340.12640015');
-      dicomWidget.dicomApp.resumeModel()
       popen.kill()
       dicomWidget.detailsPopup.open()
       # click on the first row of the tree

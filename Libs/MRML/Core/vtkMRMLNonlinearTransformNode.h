@@ -58,9 +58,39 @@ class VTK_MRML_EXPORT vtkMRMLNonlinearTransformNode : public vtkMRMLTransformNod
   virtual vtkGeneralTransform* GetTransformToParent();
 
   /// 
+  /// vtkGeneral transform of this node from paren node
+  virtual vtkGeneralTransform* GetTransformFromParent();
+
+  ///
   /// vtkWarpTransform of this node to paren node
-  vtkGetObjectMacro(WarpTransformToParent, vtkWarpTransform); 
-  void SetAndObserveWarpTransformToParent(vtkWarpTransform *warp);
+  virtual vtkWarpTransform* GetWarpTransformToParent()
+    {
+    return 0;
+    }
+
+  ///
+  /// vtkWarpTransform of this node from paren node
+  virtual vtkWarpTransform* GetWarpTransformFromParent()
+    {
+    return 0;
+    }
+
+  ///
+  /// Set and observe a new  transform of this node to parent node.
+  /// Each time the matrix is modified,
+  /// vtkMRMLTransformableNode::TransformModifiedEvent is fired.
+  /// ModifiedEvent() and TransformModifiedEvent() are fired after the transform
+  /// is set.
+  void SetAndObserveWarpTransformToParent(vtkWarpTransform *warp, bool updateTrasformFromParent);
+
+  ///
+  /// Set and observe a new  transform of this node from parent node.
+  /// Each time the matrix is modified,
+  /// vtkMRMLTransformableNode::TransformModifiedEvent is fired.
+  /// ModifiedEvent() and TransformModifiedEvent() are fired after the transform
+  /// is set.
+  void SetAndObserveWarpTransformFromParent(vtkWarpTransform *warp, bool updateTrasformToParent);
+
 
   /// 
   /// Get concatinated transforms to the top. This method is from
@@ -87,7 +117,14 @@ class VTK_MRML_EXPORT vtkMRMLNonlinearTransformNode : public vtkMRMLTransformNod
     return Superclass::CreateDefaultStorageNode();
     };
 
-  
+  ///
+  /// Deep copy input transform to this node transform to parent
+  virtual void DeepCopyTransformToParent(vtkWarpTransform * vtkNotUsed(warp)) {}
+
+  ///
+  /// Deep copy input transform to this node transform from parent
+  virtual void DeepCopyTransformFromParent(vtkWarpTransform * vtkNotUsed(warp)) {}
+
 protected:
   vtkMRMLNonlinearTransformNode();
   ~vtkMRMLNonlinearTransformNode();
@@ -95,7 +132,13 @@ protected:
   void operator=(const vtkMRMLNonlinearTransformNode&);
 
   virtual void SetWarpTransformToParent(vtkWarpTransform *);
+  virtual void SetWarpTransformFromParent(vtkWarpTransform *);
+
   vtkWarpTransform* WarpTransformToParent;
+  vtkWarpTransform* WarpTransformFromParent;
+
+  int InSetAndObserveWarpTransformToParent;
+  int InSetAndObserveWarpTransformFromParent;
 
 };
 
