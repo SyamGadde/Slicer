@@ -493,7 +493,7 @@ int main(int argc, char* * argv)
 	  );
       std::string outputMaskDir;
       std::string outputMaskFileName;
-      if (sepind == std::npos) {
+      if (sepind == std::string::npos) {
 	  outputMaskDir = "";
 	  outputMaskFileName = outputMaskName;
       } else {
