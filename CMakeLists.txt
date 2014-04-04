@@ -626,6 +626,11 @@ include(SlicerBlockFindQtAndCheckVersion)
 mark_as_superbuild(VARS QT_QMAKE_EXECUTABLE LABELS "FIND_PACKAGE")
 
 #-----------------------------------------------------------------------------
+# SlicerExecutionModel
+#-----------------------------------------------------------------------------
+mark_as_superbuild(VARS SlicerExecutionModel_CLI_EXECUTABLE_LINK_FLAGS)
+
+#-----------------------------------------------------------------------------
 # Testing
 #-----------------------------------------------------------------------------
 if(BUILD_TESTING)
