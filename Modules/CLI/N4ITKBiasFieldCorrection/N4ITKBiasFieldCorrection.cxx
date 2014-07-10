@@ -12,7 +12,9 @@
 #include "itkMinimumMaximumImageCalculator.h"
 #include "itkOtsuThresholdImageFilter.h"
 #include "itkOtsuThresholdImageCalculator.h"
+#include "itkPasteImageFilter.h"
 #include "itkReconstructionByDilationImageFilter.h"
+#include "itkRegionOfInterestImageFilter.h"
 #include "itkShrinkImageFilter.h"
 #include "itkStatisticsImageFilter.h"
 
@@ -29,7 +31,8 @@
 #include "N4ITKBiasFieldCorrectionCLP.h"
 #include "itkPluginUtilities.h"
 
-#define MAX(x,y) (((x) > (y)) ? x : y)
+#define MAX(x,y) (((x) > (y)) ? (x) : (y))
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
 
 namespace
 {
@@ -183,7 +186,7 @@ print_histogram(double * h, int numbins, double * y = NULL) {
     }
   }
   double maxbinheight = h[0];
-  for (int j = 1; j < lastsigbin; j++) {
+  for (int j = 1; j <= lastsigbin; j++) {
     if (h[j] > maxbinheight) {
       maxbinheight = h[j];
     }
@@ -195,7 +198,7 @@ print_histogram(double * h, int numbins, double * y = NULL) {
     }
   }
   std::string spacestr = std::string(50, '-');
-  for (int j = 0; j < lastsigbin; j++) {
+  for (int j = 0; j <= lastsigbin; j++) {
     int height = 50 * (h[j] / maxbinheight);
     if (y == NULL) {
       std::cout << "    " << setw(5) << j << &spacestr.c_str()[50 - height] << '*' << std::endl;
@@ -353,6 +356,8 @@ int main(int argc, char* * argv)
 
       std::cout << "    Image min, max: (" << imageMin << ", " << imageMax << ")" << std::endl;
 
+      imageMin += 0.00001; // ignore zero-valued voxels
+
       int numberOfHistogramBins = 100;
       int polyorder = 10;
 
@@ -386,7 +391,7 @@ int main(int argc, char* * argv)
       double **x = create_matrix<double> (numberOfSamples, numberOfVariables);
       for (int sn = 0; sn < numberOfSamples; sn++) {
 	for (int vn = 0; vn < numberOfVariables; vn++) {
-	  x[sn][vn] = pow((double)sn, (double)vn);
+	  x[sn][vn] = pow((double)((double)(sn+1)/numberOfSamples), (double)vn);
 	}
       }
       double **m = create_matrix<double> ( numberOfVariables, 1 );
@@ -414,29 +419,30 @@ int main(int argc, char* * argv)
       // 	}
       // }
 
-      // start with Otsu threshold, but move it to a local minimum
+      // start with Otsu threshold, but move it back to a local minimum
       typedef itk::OtsuThresholdImageCalculator<ImageType> ThresholdCalculatorType;
       ThresholdCalculatorType::Pointer threshcalc = ThresholdCalculatorType::New();
       threshcalc->SetImage(inputImage);
       threshcalc->Compute();
       ImageType::PixelType initthresh = threshcalc->GetThreshold();
       int initbin = (int) ceil( (initthresh - imageMin) / binWidth2 ) - 1;
+      if (initbin >= numberOfHistogramBins) {
+	  initbin = numberOfHistogramBins - 1;
+      }
       std::cout << "    Starting with initial threshold " << initthresh << " (bin " << initbin << ")" << endl;
-      // find the first downward contour of the fitted histogram backward
-      // from the initial choice, then choose the threshold where the fit
-      // goes back upwards.
-      int changed = 0;
-      while (initbin > 0 && y[initbin - 1][0] > y[initbin][0]) {
-	initbin--;
+      // start from the first bin and find local minima up to the otsu threshold
+      double minsofar = y[0][0];
+      int minbinsofar = 0;
+      for (int i = 1; i < initbin; i++) {
+	  if (y[i][0] < minsofar) {
+	      minsofar = y[i][0];
+	      minbinsofar = i;
+	  }
       }
-      std::cout << "    Moved backwards up to threshold bin " << initbin << std::endl;
-      while (initbin > 0 && y[initbin - 1][0] <= y[initbin][0]) {
-	initbin--;
-	changed = 1;
-      }
-      std::cout << "    Moved backwards down to threshold bin " << initbin << std::endl;
-      if (changed != 0) {
-	initthresh = binBoundaries2[initbin];
+      if (minsofar < initthresh) {
+	  initbin = minbinsofar;
+	  initthresh = binBoundaries2[initbin];
+	  std::cout << "    Moved back to threshold " << initthresh << " at bin " << initbin << std::endl;
       }
 
       delete histogramPtr2->first;
@@ -459,6 +465,86 @@ int main(int argc, char* * argv)
       thresholdFilter->Update();
       maskImage = thresholdFilter->GetOutput();
 
+      {
+	  // if any slices on the edges of the image are all zeros, replace
+	  // the corresponding slice in the mask with the mask slice
+	  // corresponding to the closest non-zero slice in the image.
+	  // Essentially treat bordering zero-filled slices as outside the
+	  // image so bordering non-zero voxels won't be necessarily eroded
+	  // by eroding filters.
+	  typedef itk::PasteImageFilter <MaskImageType, MaskImageType > PasteImageFilterType;
+	  ImageType::SizeType insize = inputImage->GetLargestPossibleRegion().GetSize();
+	  ImageType::IndexType start;
+	  ImageType::SizeType extent;
+	  ImageType::RegionType desiredRegion;
+	  for (int dimnum = 0; dimnum < ImageDimension; dimnum++) {
+	      extent = insize;
+	      extent[dimnum] = 1;
+	      for (int direction = 0; direction < 2; direction++) {
+		  int startslice;
+		  int endslice;
+		  int slicestep;
+		  if (direction == 0) {
+		      startslice = 0;
+		      endslice = insize[dimnum] - 1;
+		      slicestep = 1;
+		  } else {
+		      startslice = insize[dimnum] - 1;
+		      endslice = 0;
+		      slicestep = -1;
+		  }
+		  int endmarker = endslice + slicestep;
+		  int startmarker = startslice - slicestep;
+		  int lastzeroslice = -1;
+		  for (int sliceind = startslice; sliceind != endmarker; sliceind += slicestep) {
+		      start.Fill(0);
+		      start[dimnum] = sliceind;
+ 
+		      desiredRegion.SetSize(extent);
+		      desiredRegion.SetIndex(start);
+ 
+		      typedef itk::RegionOfInterestImageFilter< ImageType, ImageType > ROIFilterType;
+		      ROIFilterType::Pointer roifilter = ROIFilterType::New();
+		      roifilter->SetRegionOfInterest(desiredRegion);
+		      roifilter->SetInput(inputImage);
+		      roifilter->Update();
+		  
+		      RangeCalculator::Pointer rangeCalculator = RangeCalculator::New();
+		      rangeCalculator->SetImage( roifilter->GetOutput() );
+		      rangeCalculator->Compute();
+
+		      if (rangeCalculator->GetMinimum() != 0 || rangeCalculator->GetMaximum() != 0) {
+			  break;
+		      }
+		      lastzeroslice = sliceind;
+		  }
+		  if (lastzeroslice == -1 || lastzeroslice == endmarker) {
+		      continue;
+		  }
+		  for (int i = lastzeroslice; i != startmarker; i -= slicestep) {
+		      typedef itk::ImageDuplicator< MaskImageType > DuplicatorType;
+		      DuplicatorType::Pointer duplicator = DuplicatorType::New();
+		      duplicator->SetInputImage(maskImage);
+		      duplicator->Update();
+		      MaskImageType::Pointer tmpmask = duplicator->GetOutput();
+		      PasteImageFilterType::Pointer pastefilter = PasteImageFilterType::New();
+		      pastefilter->SetSourceImage(maskImage);
+		      pastefilter->SetDestinationImage(tmpmask);
+		      // desiredRegion already has the closest non-zero slice
+		      pastefilter->SetSourceRegion(desiredRegion);
+		      start.Fill(0);
+		      start[dimnum] = i;
+		      pastefilter->SetDestinationIndex(start);
+		      pastefilter->Update();
+		      std::cout << "    Extending mask edge of dim " << dimnum << " to all-zero slice " << i << std::endl;
+		      MaskImageType::Pointer newmask = pastefilter->GetOutput();
+		      maskImage = newmask;
+		  }
+	      }
+	  }
+	  ImageType::PointType origin = inputImage->GetOrigin();
+	  maskImage->SetOrigin(origin);
+      }
 
       typedef itk::BinaryBallStructuringElement<MaskImageType::PixelType, 3> BallType;
 
@@ -725,10 +811,11 @@ int main(int argc, char* * argv)
 
   ShrinkerType::ShrinkFactorsType shrinkFactors(shrinkFactor);
   if (shrinkFactorMM != 0) {
+    ImageType::SizeType size = inputImage->GetLargestPossibleRegion().GetSize();
     std::cout << "Found shrinkFactorMM: " << shrinkFactorMM << std::endl;
-    shrinkFactors[0] = MAX(vcl_floor(shrinkFactorMM/inputImage->GetSpacing()[0]), 1);
-    shrinkFactors[1] = MAX(vcl_floor(shrinkFactorMM/inputImage->GetSpacing()[1]), 1);
-    shrinkFactors[2] = MAX(vcl_floor(shrinkFactorMM/inputImage->GetSpacing()[2]), 1);
+    shrinkFactors[0] = MAX(MIN(vcl_floor(shrinkFactorMM/inputImage->GetSpacing()[0]), vcl_floor(size[0]/2)), 1);
+    shrinkFactors[1] = MAX(MIN(vcl_floor(shrinkFactorMM/inputImage->GetSpacing()[1]), vcl_floor(size[1]/2)), 1);
+    shrinkFactors[2] = MAX(MIN(vcl_floor(shrinkFactorMM/inputImage->GetSpacing()[2]), vcl_floor(size[2]/2)), 1);
   }
   std::cout << "Final shrink factors: " << shrinkFactors << std::endl;
   shrinker->SetShrinkFactors( shrinkFactors );
